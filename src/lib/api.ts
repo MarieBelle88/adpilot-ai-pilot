@@ -1,48 +1,71 @@
 // Live backend API client
-export const API_BASE_URL = "https://af56413de78d3a.lhr.life";
+export const ANALYZE_URL =
+  "https://3000-hlubhs2z5gbz7r2s.daytonaproxy01.eu/analyze";
 
-export type SnapshotCampaign = {
-  id: string;
-  name: string;
-  status: string;
-  budget: number;
+export type AnalyzeDataset = {
+  filename: string;
+  datasetType: string;
+  enabled: boolean;
+  filters: unknown;
+  rows: unknown[];
 };
 
-export type SnapshotKeyword = {
-  id: string;
-  text: string;
-  clicks: number;
-  spend: number;
-  conversions: number;
-  status: string;
+export type AnalyzeRequest = {
+  businessGoal: unknown;
+  globalRules: unknown;
+  actionMode: string;
+  datasets: AnalyzeDataset[];
 };
 
-export type Snapshot = {
-  campaigns: SnapshotCampaign[];
-  keywords: SnapshotKeyword[];
+export type BackendSummary = {
+  spend?: number;
+  clicks?: number;
+  conversions?: number;
+  revenue?: number;
+  cpa?: number;
+  roas?: number;
+  wastedSpend?: number;
+  analyzedRows?: number;
+  enabledDatasets?: number;
 };
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
+export type BackendRecommendation = {
+  id?: string;
+  title?: string;
+  datasetType?: string;
+  category?: string;
+  target?: string;
+  campaign?: string;
+  reason?: string;
+  ruleTriggered?: string;
+  expectedImpact?: string;
+  confidence?: number;
+  evidence?: string;
+  status?: string;
+};
+
+export type AnalyzeResponse = {
+  summary?: BackendSummary;
+  executiveSummary?: string;
+  recommendations?: BackendRecommendation[];
+};
+
+export async function analyzeAccountApi(
+  payload: AnalyzeRequest,
+): Promise<AnalyzeResponse> {
+  const res = await fetch(ANALYZE_URL, {
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
+      "X-Daytona-Skip-Preview-Warning": "true",
     },
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status} ${res.statusText}`);
+    const text = await res.text().catch(() => "");
+    throw new Error(
+      `Analyze request failed: ${res.status} ${res.statusText}${text ? ` — ${text.slice(0, 300)}` : ""}`,
+    );
   }
-  return (await res.json()) as T;
-}
-
-export function fetchSnapshot(): Promise<Snapshot> {
-  return request<Snapshot>("/api/snapshot");
-}
-
-export function pauseKeyword(keywordId: string) {
-  return request<{ status: string; message: string }>(
-    `/api/action/pause-keyword?keyword_id=${encodeURIComponent(keywordId)}`,
-    { method: "POST" },
-  );
+  return (await res.json()) as AnalyzeResponse;
 }
