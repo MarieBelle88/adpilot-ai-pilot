@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   analyzeAccountApi,
   type BackendRecommendation,
@@ -16,7 +16,6 @@ import {
   Database,
   FileText,
   Filter,
-  Globe,
   History,
   Layers,
   Lightbulb,
@@ -31,17 +30,6 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-} from "recharts";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -222,9 +210,6 @@ function renderTextLike(v: unknown): string {
 
 
 function AdPilotDashboard() {
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => setIsMounted(true), []);
-
   // ---------- Config state ----------
   const [websiteUrl, setWebsiteUrl] = useState("https://www.pipedrive.com/");
   const [websiteUrlError, setWebsiteUrlError] = useState<string | null>(null);
@@ -418,42 +403,6 @@ function AdPilotDashboard() {
     () => displayRecs.filter((r) => (r.confidence ?? 0) >= minConfidence[0]),
     [displayRecs, minConfidence],
   );
-
-  const chartData = useMemo(() => {
-    const totalSpend = summary.spend || 1000;
-    const totalConversions = summary.conversions || 50;
-    const roas = summary.roas || 3;
-    return Array.from({ length: 30 }, (_, i) => {
-      const variation = 0.6 + 0.8 * Math.abs(Math.sin(i * 1.2 + (totalSpend % 100) * 0.1));
-      const spend = Math.round((totalSpend / 30) * variation);
-      const revenue = Math.round(spend * roas * (0.85 + 0.3 * Math.abs(Math.sin(i * 0.8))));
-      const conversions = Math.max(0, Math.round((totalConversions / 30) * variation * (0.8 + 0.4 * Math.abs(Math.sin(i * 0.9)))));
-      return { day: `D${i + 1}`, spend, revenue, conversions };
-    });
-  }, [summary.spend, summary.conversions, summary.roas]);
-
-  const campaignList = useMemo(() => {
-    const map = new Map<string, { name: string; spend: number; conversions: number; clicks: number; recs: number }>();
-    for (const rec of displayRecs) {
-      if (rec.campaign) {
-        const e = map.get(rec.campaign) ?? { name: rec.campaign, spend: 0, conversions: 0, clicks: 0, recs: 0 };
-        e.recs++;
-        map.set(rec.campaign, e);
-      }
-    }
-    for (const d of enabledDatasets) {
-      for (const row of d.rows as unknown as Record<string, unknown>[]) {
-        const cName = String((row?.campaign ?? row?.Campaign ?? "") as string);
-        if (!cName) continue;
-        const e = map.get(cName) ?? { name: cName, spend: 0, conversions: 0, clicks: 0, recs: 0 };
-        e.spend += Number(row?.cost ?? row?.spend ?? 0);
-        e.conversions += Number(row?.conversions ?? 0);
-        e.clicks += Number(row?.clicks ?? 0);
-        map.set(cName, e);
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => b.recs - a.recs);
-  }, [displayRecs, enabledDatasets]);
 
   const goalProgress = useMemo(() => {
     if (primaryKpi === "CPA") {
@@ -867,6 +816,14 @@ function AdPilotDashboard() {
               </Alert>
             )}
 
+            {analysisResult && (analysisResult.websiteContext || (analysisResult.websiteRecommendations?.length ?? 0) > 0) && (
+              <WebsiteAnalysisCard
+                context={analysisResult.websiteContext}
+                recommendations={analysisResult.websiteRecommendations}
+              />
+            )}
+
+
             {!summary.trackingHealthy && (
               <Alert className="border-warning/40 bg-warning/10 text-foreground">
                 <ShieldAlert className="h-4 w-4 text-warning" />
@@ -875,69 +832,14 @@ function AdPilotDashboard() {
               </Alert>
             )}
 
-            {summary.wastedSpend > 0 && (
-              <div className="flex flex-col gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-800 dark:bg-orange-950/20 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900">
-                    <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                  </div>
-                  <p className="text-sm">
-                    <span className="font-semibold text-orange-800 dark:text-orange-200">AdPilot detected </span>
-                    <span className="font-bold text-orange-800 dark:text-orange-200">${summary.wastedSpend.toLocaleString()}</span>
-                    <span className="text-orange-700 dark:text-orange-300"> of spend across low-intent queries</span>
-                  </p>
-                </div>
-                <Button size="sm" variant="outline" className="shrink-0 border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-orange-700 dark:text-orange-300">
-                  Review recommendations
-                </Button>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <MetricCard label="Ad spend" value={`$${summary.spend.toLocaleString()}`} sub={`${summary.clicks.toLocaleString()} clicks`} />
-              <MetricCard label="Wasted spend" value={`$${summary.wastedSpend.toLocaleString()}`} sub="Low-intent queries" alert />
-              <MetricCard label="ROAS" value={`${summary.roas.toFixed(2)}×`} sub={`CPA: $${summary.cpa.toFixed(0)}`} />
-              <MetricCard label="Conversions" value={summary.conversions.toLocaleString()} sub={`CTR: ${ctrDisplay}`} />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+              <Stat label="Spend" value={`$${summary.spend.toLocaleString()}`} />
+              <Stat label="Conversions" value={summary.conversions.toString()} />
+              <Stat label="CPA" value={`$${summary.cpa.toFixed(2)}`} />
+              <Stat label="ROAS" value={`${summary.roas.toFixed(2)}×`} />
+              <Stat label="Clicks" value={summary.clicks.toLocaleString()} />
+              <Stat label="CTR" value={ctrDisplay} />
             </div>
-
-            {isMounted && (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Spend &amp; estimated revenue (30 days)</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <ResponsiveContainer width="100%" height={160}>
-                      <LineChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="day" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={5} />
-                        <YAxis yAxisId="left" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={42} tickFormatter={(v) => `$${v}`} />
-                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={42} tickFormatter={(v) => `$${v}`} />
-                        <RechartsTooltip contentStyle={{ fontSize: 12 }} />
-                        <Line yAxisId="left" type="monotone" dataKey="spend" stroke="#8b5cf6" dot={false} strokeWidth={2} name="Spend ($)" />
-                        <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" dot={false} strokeWidth={2} name="Revenue ($)" />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Daily conversions (30 days)</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <ResponsiveContainer width="100%" height={160}>
-                      <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="day" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={5} />
-                        <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={30} />
-                        <RechartsTooltip contentStyle={{ fontSize: 12 }} />
-                        <Bar dataKey="conversions" fill="#6366f1" radius={[2, 2, 0, 0]} name="Conversions" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
 
             <div className="grid gap-4 lg:grid-cols-3">
               <Card>
@@ -968,14 +870,12 @@ function AdPilotDashboard() {
 
             <Tabs defaultValue="summary" className="w-full">
               <TabsList className="flex w-full flex-wrap justify-start gap-1">
-                <TabsTrigger value="summary"><Sparkles className="mr-1 h-3.5 w-3.5" />Summary</TabsTrigger>
-                <TabsTrigger value="campaigns"><BarChart3 className="mr-1 h-3.5 w-3.5" />Campaigns</TabsTrigger>
+                <TabsTrigger value="summary"><Sparkles className="mr-1 h-3.5 w-3.5" />Executive summary</TabsTrigger>
                 <TabsTrigger value="keywords"><Lightbulb className="mr-1 h-3.5 w-3.5" />Keywords</TabsTrigger>
                 <TabsTrigger value="ad_groups"><Layers className="mr-1 h-3.5 w-3.5" />Ad groups</TabsTrigger>
-                <TabsTrigger value="markets"><Activity className="mr-1 h-3.5 w-3.5" />Markets</TabsTrigger>
+                <TabsTrigger value="markets"><BarChart3 className="mr-1 h-3.5 w-3.5" />Markets</TabsTrigger>
                 <TabsTrigger value="risks"><AlertTriangle className="mr-1 h-3.5 w-3.5" />Risks</TabsTrigger>
-                <TabsTrigger value="website"><Globe className="mr-1 h-3.5 w-3.5" />Website</TabsTrigger>
-                <TabsTrigger value="history"><History className="mr-1 h-3.5 w-3.5" />History</TabsTrigger>
+                <TabsTrigger value="history"><History className="mr-1 h-3.5 w-3.5" />Action history</TabsTrigger>
               </TabsList>
 
               <TabsContent value="summary" className="mt-4 space-y-3">
@@ -1011,58 +911,6 @@ function AdPilotDashboard() {
                   </TabsContent>
                 );
               })}
-
-              <TabsContent value="campaigns" className="mt-4">
-                {campaignList.length === 0 ? (
-                  <EmptyState />
-                ) : (
-                  <Card>
-                    <CardContent className="p-0">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead className="border-b bg-muted/50">
-                            <tr>
-                              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Campaign</th>
-                              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Spend</th>
-                              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Clicks</th>
-                              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Conv.</th>
-                              <th className="px-4 py-3 text-right font-medium text-muted-foreground">Recs</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {campaignList.map((c, i) => (
-                              <tr key={`camp-${i}`} className="border-b last:border-0 transition-colors hover:bg-muted/30">
-                                <td className="px-4 py-3 font-medium">{c.name}</td>
-                                <td className="px-4 py-3 text-right">{c.spend > 0 ? `$${Math.round(c.spend).toLocaleString()}` : "—"}</td>
-                                <td className="px-4 py-3 text-right">{c.clicks > 0 ? c.clicks.toLocaleString() : "—"}</td>
-                                <td className="px-4 py-3 text-right">{c.conversions > 0 ? c.conversions.toLocaleString() : "—"}</td>
-                                <td className="px-4 py-3 text-right">
-                                  {c.recs > 0 ? <Badge variant="secondary">{c.recs}</Badge> : "—"}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-
-              <TabsContent value="website" className="mt-4">
-                {analysisResult && (analysisResult.websiteContext || (analysisResult.websiteRecommendations?.length ?? 0) > 0) ? (
-                  <WebsiteAnalysisCard
-                    context={analysisResult.websiteContext}
-                    recommendations={analysisResult.websiteRecommendations}
-                  />
-                ) : (
-                  <Card>
-                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                      Run an analysis with a website URL to see website insights here.
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
 
               <TabsContent value="history" className="mt-4">
                 {history.length === 0 ? (
@@ -1386,18 +1234,6 @@ function Stat({ label, value }: { label: string; value: string }) {
       <CardContent className="p-4">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
         <div className="mt-1 text-xl font-semibold sm:text-2xl">{value}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function MetricCard({ label, value, sub, alert: isAlert }: { label: string; value: string; sub?: string; alert?: boolean }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-        <div className={cn("mt-1 text-2xl font-semibold", isAlert && "text-destructive")}>{value}</div>
-        {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
       </CardContent>
     </Card>
   );
