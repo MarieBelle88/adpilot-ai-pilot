@@ -452,12 +452,18 @@ function AdPilotDashboard() {
     setLastAnalyzeStats({ datasetCount: payload.datasets.length, totalRows });
     // eslint-disable-next-line no-console
     console.log("[AdPilot] Analyze payload", payload);
+    // eslint-disable-next-line no-console
+    console.log("[AdPilot] websiteUrl:", payload.websiteUrl, "marketingNotes:", payload.marketingNotes);
     try {
       const res = await analyzeAccountApi(payload);
+      // eslint-disable-next-line no-console
+      console.log("[AdPilot] Analyze response", res);
       setAnalysisResult({
         summary: res.summary,
         executiveSummary: res.executiveSummary,
         recommendations: res.recommendations ?? [],
+        websiteContext: res.websiteContext,
+        websiteRecommendations: res.websiteRecommendations,
       });
       setStatus({});
       toast.success("Analysis complete", {
