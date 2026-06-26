@@ -764,7 +764,7 @@ function AdPilotDashboard() {
                       <EmptyState />
                     ) : (
                       recs.map((r) => (
-                        <RecCard key={r.id} rec={r} status={status[r.id]} onDecide={decide} />
+                        <RecCard key={r.id ?? ""} rec={r} status={status[r.id ?? ""]} onDecide={decide} />
                       ))
                     )}
                   </TabsContent>
