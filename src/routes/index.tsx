@@ -81,34 +81,65 @@ export const Route = createFileRoute("/")({
 
 type ActionStatus = "pending" | "approved" | "rejected";
 
+type KeywordFilters = {
+  campaigns: string[];
+  keywords: string[];
+  devices: string[];
+  countries: string[];
+  minSpend: string;
+  minClicks: string;
+  minConversions: string;
+  dateRange: string;
+};
+type AdGroupFilters = {
+  months: string[];
+  adGroups: string[];
+  devices: string[];
+  minCost: string;
+  minRevenue: string;
+  negativeProfitOnly: boolean;
+};
+type MarketFilters = {
+  platforms: string[];
+  campaignTypes: string[];
+  countries: string[];
+  industries: string[];
+  minCpa: string;
+  minRoas: string;
+  dateRange: string;
+};
+type DatasetFilters = KeywordFilters | AdGroupFilters | MarketFilters | Record<string, never>;
+
 type Dataset = {
   id: string;
   name: string;
   filename: string;
-  rows: CampaignRow[];
-  headers: string[];
-  rawHeaders: string[];
-  type: DatasetType;
+  datasetType: DatasetType;
   enabled: boolean;
-  filters: {
-    campaigns: string[];
-    devices: string[];
-    countries: string[];
-    platforms: string[];
-    industries: string[];
-    adGroups: string[];
-  };
+  columns: string[];
+  rawHeaders: string[];
+  rowCount: number;
+  rows: CampaignRow[];
+  filters: DatasetFilters;
 };
 
-function makeDatasetFilters(rows: CampaignRow[]): Dataset["filters"] {
-  return {
-    campaigns: extractUnique(rows, "campaign"),
-    devices: extractUnique(rows, "device"),
-    countries: extractUnique(rows, "country"),
-    platforms: extractUnique(rows, "platform"),
-    industries: extractUnique(rows, "industry"),
-    adGroups: extractUnique(rows, "ad_group"),
-  };
+function makeFiltersFor(type: DatasetType): DatasetFilters {
+  if (type === "keyword")
+    return {
+      campaigns: [], keywords: [], devices: [], countries: [],
+      minSpend: "", minClicks: "", minConversions: "", dateRange: "Last 30 days",
+    };
+  if (type === "ad_group")
+    return {
+      months: [], adGroups: [], devices: [],
+      minCost: "", minRevenue: "", negativeProfitOnly: false,
+    };
+  if (type === "market")
+    return {
+      platforms: [], campaignTypes: [], countries: [], industries: [],
+      minCpa: "", minRoas: "", dateRange: "Last 30 days",
+    };
+  return {};
 }
 
 type RecTab = "summary" | "keywords" | "ad_groups" | "markets" | "risks";
@@ -172,12 +203,13 @@ function AdPilotDashboard() {
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           name: file.name.replace(/\.csv$/i, ""),
           filename: file.name,
-          rows: parsed.rows,
-          headers: parsed.headers,
-          rawHeaders: parsed.rawHeaders,
-          type: parsed.detectedType,
+          datasetType: parsed.detectedType,
           enabled: true,
-          filters: makeDatasetFilters(parsed.rows),
+          columns: parsed.columns,
+          rawHeaders: parsed.rawHeaders,
+          rowCount: parsed.rows.length,
+          rows: parsed.rows,
+          filters: makeFiltersFor(parsed.detectedType),
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to parse CSV";
@@ -193,18 +225,25 @@ function AdPilotDashboard() {
   }
 
   function updateDataset(id: string, patch: Partial<Dataset>) {
-    setDatasets((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+    setDatasets((ds) =>
+      ds.map((d) => {
+        if (d.id !== id) return d;
+        const merged = { ...d, ...patch };
+        if (patch.datasetType && patch.datasetType !== d.datasetType) {
+          merged.filters = makeFiltersFor(patch.datasetType);
+        }
+        return merged;
+      }),
+    );
   }
   function removeDataset(id: string) {
     setDatasets((ds) => ds.filter((d) => d.id !== id));
   }
-  function updateDatasetFilter<K extends keyof Dataset["filters"]>(
-    id: string,
-    key: K,
-    value: Dataset["filters"][K],
-  ) {
+  function updateDatasetFilters(id: string, patch: Partial<DatasetFilters>) {
     setDatasets((ds) =>
-      ds.map((d) => (d.id === id ? { ...d, filters: { ...d.filters, [key]: value } } : d)),
+      ds.map((d) =>
+        d.id === id ? { ...d, filters: { ...(d.filters as Record<string, unknown>), ...patch } as DatasetFilters } : d,
+      ),
     );
   }
 
@@ -231,13 +270,11 @@ function AdPilotDashboard() {
     return Math.min(100, Math.round((summary.roas / Number(targetKpi || 1)) * 100));
   }, [primaryKpi, targetKpi, summary]);
 
-  async function handleAnalyze() {
+  function handleAnalyze() {
     setAnalyzing(true);
     try {
       const payload = {
-        config: {
-          websiteUrl,
-          marketingNotes,
+        businessGoal: {
           objective,
           primaryKpi,
           targetKpi: Number(targetKpi),
@@ -245,10 +282,10 @@ function AdPilotDashboard() {
           budgetAmount: Number(budgetAmount),
           targetCountry,
           conversionType,
-          useDemoData,
-          googleExperimental,
+          websiteUrl,
+          marketingNotes,
         },
-        globalFilters: {
+        globalRules: {
           dateRange,
           matchType,
           minImpressions: Number(minImpressions),
@@ -257,8 +294,6 @@ function AdPilotDashboard() {
           minConversions: Number(minConversions),
           zeroConvOnly,
           minConfidence: minConfidence[0],
-        },
-        rules: {
           zeroConvSpend: Number(zeroConvSpend),
           highCpaPct: Number(highCpaPct),
           maxBidChange: Number(maxBidChange),
@@ -268,23 +303,21 @@ function AdPilotDashboard() {
         // Each dataset is sent separately — never combined.
         datasets: enabledDatasets.map((d) => ({
           id: d.id,
-          name: d.name,
           filename: d.filename,
-          detectedType: d.type,
-          columns: d.headers,
-          rawColumns: d.rawHeaders,
-          rowCount: d.rows.length,
-          activeFilters: d.filters,
+          datasetType: d.datasetType,
+          enabled: d.enabled,
+          columns: d.columns,
+          rowCount: d.rowCount,
           rows: d.rows,
+          filters: d.filters,
         })),
-        useDemoData: useDemoData && enabledDatasets.length === 0,
       };
-      const res = await analyzeAccount({ data: payload });
-      setSummary(res.summary);
-      setRecommendations(res.recommendations);
-      toast.success("Analysis complete", { description: `${res.recommendations.length} recommendations.` });
-    } catch (e) {
-      toast.error("Analysis failed", { description: e instanceof Error ? e.message : "Unknown error" });
+      // Backend not connected yet. Log payload for inspection.
+      // eslint-disable-next-line no-console
+      console.log("[AdPilot] Analyze payload", payload);
+      toast.success("Payload logged to console", {
+        description: `${payload.datasets.length} dataset${payload.datasets.length === 1 ? "" : "s"} ready for analysis.`,
+      });
     } finally {
       setAnalyzing(false);
     }
@@ -372,7 +405,7 @@ function AdPilotDashboard() {
                         dataset={d}
                         onChange={(patch) => updateDataset(d.id, patch)}
                         onRemove={() => removeDataset(d.id)}
-                        onFilterChange={(k, v) => updateDatasetFilter(d.id, k, v)}
+                        onFiltersChange={(patch) => updateDatasetFilters(d.id, patch)}
                       />
                     ))}
                   </div>
@@ -618,24 +651,14 @@ function DatasetCard({
   dataset,
   onChange,
   onRemove,
-  onFilterChange,
+  onFiltersChange,
 }: {
   dataset: Dataset;
   onChange: (patch: Partial<Dataset>) => void;
   onRemove: () => void;
-  onFilterChange: <K extends keyof Dataset["filters"]>(k: K, v: Dataset["filters"][K]) => void;
+  onFiltersChange: (patch: Partial<DatasetFilters>) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const f = dataset.filters;
-  const filterGroups = ([
-    { label: "Campaigns", key: "campaigns", opts: f.campaigns },
-    { label: "Ad groups", key: "adGroups", opts: f.adGroups },
-    { label: "Devices", key: "devices", opts: f.devices },
-    { label: "Countries", key: "countries", opts: f.countries },
-    { label: "Platforms", key: "platforms", opts: f.platforms },
-    { label: "Industries", key: "industries", opts: f.industries },
-  ] as const).filter((g) => g.opts.length > 0);
-
   return (
     <div className={cn("rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2", !dataset.enabled && "opacity-60")}>
       <div className="flex items-start gap-2">
@@ -647,10 +670,13 @@ function DatasetCard({
             className="h-7 bg-sidebar text-xs"
           />
           <div className="mt-1 truncate text-[11px] text-sidebar-foreground/60">
-            {dataset.filename} · {dataset.rows.length.toLocaleString()} rows
+            {dataset.filename} · {dataset.rowCount.toLocaleString()} rows
           </div>
           <div className="mt-1">
-            <Select value={dataset.type} onValueChange={(v) => onChange({ type: v as DatasetType })}>
+            <Select
+              value={dataset.datasetType}
+              onValueChange={(v) => onChange({ datasetType: v as DatasetType })}
+            >
               <SelectTrigger className="h-7 bg-sidebar text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {(Object.keys(DATASET_LABELS) as DatasetType[]).map((t) => (
@@ -666,27 +692,155 @@ function DatasetCard({
       </div>
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger className="mt-2 flex w-full items-center justify-between rounded px-1 py-1 text-[11px] text-sidebar-foreground/70 hover:bg-sidebar-accent">
-          <span>Columns &amp; filters</span>
+          <span>Columns, filters &amp; preview</span>
           <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
         </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-2 pt-2">
-          <div className="flex flex-wrap gap-1">
-            {dataset.rawHeaders.map((h) => (
-              <Badge key={h} variant="outline" className="text-[10px]">{h}</Badge>
-            ))}
-          </div>
-          {filterGroups.map((g) => (
-            <div key={g.key}>
-              <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">{g.label}</div>
-              <MultiCheckList
-                options={g.opts}
-                value={f[g.key]}
-                onChange={(v) => onFilterChange(g.key, v)}
-              />
+        <CollapsibleContent className="space-y-3 pt-2">
+          <div>
+            <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">Detected columns</div>
+            <div className="flex flex-wrap gap-1">
+              {dataset.columns.map((h) => (
+                <Badge key={h} variant="outline" className="text-[10px]">{h}</Badge>
+              ))}
             </div>
-          ))}
+          </div>
+          {dataset.enabled && <DatasetFilterControls dataset={dataset} onFiltersChange={onFiltersChange} />}
+          <DatasetPreview dataset={dataset} />
         </CollapsibleContent>
       </Collapsible>
+    </div>
+  );
+}
+
+function DatasetFilterControls({
+  dataset,
+  onFiltersChange,
+}: {
+  dataset: Dataset;
+  onFiltersChange: (patch: Partial<DatasetFilters>) => void;
+}) {
+  const t = dataset.datasetType;
+  if (t === "keyword") {
+    const f = dataset.filters as KeywordFilters;
+    return (
+      <div className="space-y-2">
+        <MultiOpt label="Campaign" opts={extractUnique(dataset.rows, "campaign")} value={f.campaigns} onChange={(v) => onFiltersChange({ campaigns: v })} />
+        <MultiOpt label="Keyword" opts={extractUnique(dataset.rows, "keyword")} value={f.keywords} onChange={(v) => onFiltersChange({ keywords: v })} />
+        <MultiOpt label="Device" opts={extractUnique(dataset.rows, "device")} value={f.devices} onChange={(v) => onFiltersChange({ devices: v })} />
+        <MultiOpt label="Location" opts={extractUnique(dataset.rows, "country")} value={f.countries} onChange={(v) => onFiltersChange({ countries: v })} />
+        <NumGrid>
+          <NumIn label="Min spend" value={f.minSpend} onChange={(v) => onFiltersChange({ minSpend: v })} />
+          <NumIn label="Min clicks" value={f.minClicks} onChange={(v) => onFiltersChange({ minClicks: v })} />
+          <NumIn label="Min conversions" value={f.minConversions} onChange={(v) => onFiltersChange({ minConversions: v })} />
+        </NumGrid>
+        <DateRangeSelect value={f.dateRange} onChange={(v) => onFiltersChange({ dateRange: v })} />
+      </div>
+    );
+  }
+  if (t === "ad_group") {
+    const f = dataset.filters as AdGroupFilters;
+    return (
+      <div className="space-y-2">
+        <MultiOpt label="Month" opts={extractUnique(dataset.rows, "month")} value={f.months} onChange={(v) => onFiltersChange({ months: v })} />
+        <MultiOpt label="Ad group" opts={extractUnique(dataset.rows, "ad_group")} value={f.adGroups} onChange={(v) => onFiltersChange({ adGroups: v })} />
+        <MultiOpt label="Device" opts={extractUnique(dataset.rows, "device")} value={f.devices} onChange={(v) => onFiltersChange({ devices: v })} />
+        <NumGrid>
+          <NumIn label="Min cost" value={f.minCost} onChange={(v) => onFiltersChange({ minCost: v })} />
+          <NumIn label="Min revenue" value={f.minRevenue} onChange={(v) => onFiltersChange({ minRevenue: v })} />
+        </NumGrid>
+        <label className="flex cursor-pointer items-center justify-between rounded-md border border-sidebar-border bg-sidebar p-2 text-xs">
+          <span>Negative profit only</span>
+          <Switch checked={f.negativeProfitOnly} onCheckedChange={(v) => onFiltersChange({ negativeProfitOnly: v })} />
+        </label>
+      </div>
+    );
+  }
+  if (t === "market") {
+    const f = dataset.filters as MarketFilters;
+    return (
+      <div className="space-y-2">
+        <MultiOpt label="Platform" opts={extractUnique(dataset.rows, "platform")} value={f.platforms} onChange={(v) => onFiltersChange({ platforms: v })} />
+        <MultiOpt label="Campaign type" opts={extractUnique(dataset.rows, "campaign_type")} value={f.campaignTypes} onChange={(v) => onFiltersChange({ campaignTypes: v })} />
+        <MultiOpt label="Country" opts={extractUnique(dataset.rows, "country")} value={f.countries} onChange={(v) => onFiltersChange({ countries: v })} />
+        <MultiOpt label="Industry" opts={extractUnique(dataset.rows, "industry")} value={f.industries} onChange={(v) => onFiltersChange({ industries: v })} />
+        <NumGrid>
+          <NumIn label="Min CPA" value={f.minCpa} onChange={(v) => onFiltersChange({ minCpa: v })} />
+          <NumIn label="Min ROAS" value={f.minRoas} onChange={(v) => onFiltersChange({ minRoas: v })} />
+        </NumGrid>
+        <DateRangeSelect value={f.dateRange} onChange={(v) => onFiltersChange({ dateRange: v })} />
+      </div>
+    );
+  }
+  return <p className="text-[11px] text-sidebar-foreground/60">Set a dataset type to enable filters.</p>;
+}
+
+function MultiOpt({ label, opts, value, onChange }: { label: string; opts: string[]; value: string[]; onChange: (v: string[]) => void }) {
+  if (!opts.length) return null;
+  return (
+    <div>
+      <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">{label}</div>
+      <MultiCheckList options={opts} value={value} onChange={onChange} />
+    </div>
+  );
+}
+
+function NumGrid({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-2 gap-2">{children}</div>;
+}
+
+function NumIn({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <Label className="mb-1 block text-[11px] text-sidebar-foreground/60">{label}</Label>
+      <Input value={value} onChange={(e) => onChange(e.target.value)} className="h-7 bg-sidebar text-xs" />
+    </div>
+  );
+}
+
+function DateRangeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <Label className="mb-1 block text-[11px] text-sidebar-foreground/60">Date range</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-7 bg-sidebar text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {["Last 7 days", "Last 30 days", "Last 90 days", "This quarter", "All time"].map((d) => (
+            <SelectItem key={d} value={d}>{d}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function DatasetPreview({ dataset }: { dataset: Dataset }) {
+  const preview = dataset.rows.slice(0, 5);
+  if (!preview.length) return null;
+  return (
+    <div>
+      <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">First 5 rows</div>
+      <div className="overflow-x-auto rounded-md border border-sidebar-border bg-sidebar">
+        <table className="w-full text-[10px]">
+          <thead className="bg-sidebar-accent/60">
+            <tr>
+              {dataset.columns.map((c) => (
+                <th key={c} className="whitespace-nowrap px-2 py-1 text-left font-medium text-sidebar-foreground/70">{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {preview.map((row, i) => (
+              <tr key={i} className="border-t border-sidebar-border">
+                {dataset.columns.map((c) => (
+                  <td key={c} className="whitespace-nowrap px-2 py-1 text-sidebar-foreground/80">
+                    {String(row[c] ?? "")}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
