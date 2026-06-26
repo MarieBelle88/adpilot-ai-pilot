@@ -12,4 +12,12 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    server: {
+      proxy: {
+        "/analyze": "http://localhost:8000",
+        "/api": "http://localhost:8000",
+      },
+    },
+  },
 });
