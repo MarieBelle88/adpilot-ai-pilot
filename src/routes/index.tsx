@@ -566,7 +566,21 @@ function AdPilotDashboard() {
                 )}
 
                 <FieldLabel>Website URL</FieldLabel>
-                <Input value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://" className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
+                <Input
+                  value={websiteUrl}
+                  onChange={(e) => {
+                    setWebsiteUrl(e.target.value);
+                    if (websiteUrlError) setWebsiteUrlError(null);
+                    // eslint-disable-next-line no-console
+                    console.log("[AdPilot] websiteUrl changed:", e.target.value);
+                  }}
+                  placeholder="https://"
+                  aria-invalid={!!websiteUrlError}
+                  className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                />
+                {websiteUrlError && (
+                  <p className="mt-1 text-xs text-destructive">{websiteUrlError}</p>
+                )}
                 <FieldLabel>Marketing notes</FieldLabel>
                 <Textarea value={marketingNotes} onChange={(e) => setMarketingNotes(e.target.value)} rows={3} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
               </Section>
