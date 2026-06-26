@@ -203,12 +203,13 @@ function AdPilotDashboard() {
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           name: file.name.replace(/\.csv$/i, ""),
           filename: file.name,
-          rows: parsed.rows,
-          headers: parsed.headers,
-          rawHeaders: parsed.rawHeaders,
-          type: parsed.detectedType,
+          datasetType: parsed.detectedType,
           enabled: true,
-          filters: makeDatasetFilters(parsed.rows),
+          columns: parsed.columns,
+          rawHeaders: parsed.rawHeaders,
+          rowCount: parsed.rows.length,
+          rows: parsed.rows,
+          filters: makeFiltersFor(parsed.detectedType),
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to parse CSV";
@@ -224,18 +225,25 @@ function AdPilotDashboard() {
   }
 
   function updateDataset(id: string, patch: Partial<Dataset>) {
-    setDatasets((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+    setDatasets((ds) =>
+      ds.map((d) => {
+        if (d.id !== id) return d;
+        const merged = { ...d, ...patch };
+        if (patch.datasetType && patch.datasetType !== d.datasetType) {
+          merged.filters = makeFiltersFor(patch.datasetType);
+        }
+        return merged;
+      }),
+    );
   }
   function removeDataset(id: string) {
     setDatasets((ds) => ds.filter((d) => d.id !== id));
   }
-  function updateDatasetFilter<K extends keyof Dataset["filters"]>(
-    id: string,
-    key: K,
-    value: Dataset["filters"][K],
-  ) {
+  function updateDatasetFilters(id: string, patch: Partial<DatasetFilters>) {
     setDatasets((ds) =>
-      ds.map((d) => (d.id === id ? { ...d, filters: { ...d.filters, [key]: value } } : d)),
+      ds.map((d) =>
+        d.id === id ? { ...d, filters: { ...(d.filters as Record<string, unknown>), ...patch } as DatasetFilters } : d,
+      ),
     );
   }
 
