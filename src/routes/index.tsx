@@ -355,14 +355,14 @@ function AdPilotDashboard() {
                   </SelectContent>
                 </Select>
                 <FieldLabel>Campaigns</FieldLabel>
-                <MultiCheckList options={mockCampaigns} value={campaigns} onChange={setCampaigns} />
+                <MultiCheckList options={csvCampaigns} value={campaigns} onChange={setCampaigns} />
                 <FieldLabel>Devices</FieldLabel>
-                <MultiCheckList options={["Desktop", "Mobile", "Tablet"]} value={devices} onChange={setDevices} />
+                <MultiCheckList options={csvDevices} value={devices} onChange={setDevices} />
                 <FieldLabel>Country</FieldLabel>
                 <Select value={country} onValueChange={setCountry}>
                   <SelectTrigger className="bg-sidebar-accent/40"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {mockCountries.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {csvCountries.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FieldLabel>Match type</FieldLabel>
