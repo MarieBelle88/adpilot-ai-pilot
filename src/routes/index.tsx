@@ -833,7 +833,7 @@ function AdPilotDashboard() {
               <Stat label="CPA" value={`$${summary.cpa.toFixed(2)}`} />
               <Stat label="ROAS" value={`${summary.roas.toFixed(2)}×`} />
               <Stat label="Clicks" value={summary.clicks.toLocaleString()} />
-              <Stat label="CTR" value={`${summary.ctr.toFixed(2)}%`} />
+              <Stat label="CTR" value={ctrDisplay} />
             </div>
 
             <div className="grid gap-4 lg:grid-cols-3">
