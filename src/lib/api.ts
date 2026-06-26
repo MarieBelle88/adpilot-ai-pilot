@@ -1,6 +1,8 @@
 // Live backend API client
-export const ANALYZE_URL =
-  "https://3000-hlubhs2z5gbz7r2s.daytonaproxy01.eu/analyze";
+const BACKEND_BASE =
+  (import.meta.env.VITE_BACKEND_URL as string) || "https://3000-hlubhs2z5gbz7r2s.daytonaproxy01.eu";
+
+export const ANALYZE_URL = `${BACKEND_BASE.replace(/\/$/, "")}/analyze`;
 
 export type AnalyzeDataset = {
   filename: string;
@@ -11,6 +13,8 @@ export type AnalyzeDataset = {
 };
 
 export type AnalyzeRequest = {
+  websiteUrl: string;
+  marketingNotes: string;
   businessGoal: unknown;
   globalRules: unknown;
   actionMode: string;
@@ -22,11 +26,21 @@ export type BackendSummary = {
   clicks?: number;
   conversions?: number;
   revenue?: number;
-  cpa?: number;
-  roas?: number;
+  cpa?: number | null;
+  roas?: number | null;
   wastedSpend?: number;
   analyzedRows?: number;
   enabledDatasets?: number;
+  dataQualityWarnings?: string[];
+};
+
+export type BackendEvidence = {
+  spend: number;
+  clicks: number;
+  conversions: number;
+  cpa: number | null;
+  roas: number | null;
+  profit: number;
 };
 
 export type BackendRecommendation = {
@@ -34,49 +48,50 @@ export type BackendRecommendation = {
   title?: string;
   datasetType?: string;
   category?: string;
+  actionType?: string;
   target?: string;
   campaign?: string;
   reason?: string;
   ruleTriggered?: string;
   expectedImpact?: string;
   confidence?: number;
-  evidence?: string;
+  evidence?: BackendEvidence;
   status?: string;
+  websiteRelevance?: number;
 };
 
 export type WebsiteContext = {
+  url?: string;
+  finalUrl?: string;
   fetchStatus?: string;
   title?: string;
+  metaDescription?: string;
   businessSummary?: string;
-  topics?: unknown[];
-  headings?: unknown[];
+  topics?: string[];
+  headings?: string[];
   hasClearCta?: boolean;
   warning?: string;
 };
 
 export type WebsiteRecommendation = {
-  id?: string;
+  type?: string;
   title?: string;
   reason?: string;
-  evidence?: string;
-  expectedImpact?: string;
-  confidence?: number;
   [key: string]: unknown;
 };
 
 export type AnalyzeResponse = {
+  analysisId?: string;
+  generatedAt?: string;
   summary?: BackendSummary;
-  executiveSummary?:
-    | string
-    | { headline?: string; findings?: unknown[]; limitations?: unknown[] };
+  executiveSummary?: string | { headline?: string; findings?: string[]; limitations?: string[] };
   recommendations?: BackendRecommendation[];
   websiteContext?: WebsiteContext;
   websiteRecommendations?: WebsiteRecommendation[];
+  datasetResults?: Array<Record<string, unknown>>;
 };
 
-export async function analyzeAccountApi(
-  payload: AnalyzeRequest,
-): Promise<AnalyzeResponse> {
+export async function analyzeAccountApi(payload: AnalyzeRequest): Promise<AnalyzeResponse> {
   const res = await fetch(ANALYZE_URL, {
     method: "POST",
     headers: {

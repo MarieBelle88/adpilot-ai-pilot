@@ -42,19 +42,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Toaster } from "@/components/ui/sonner";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-import { analyzeAccount } from "@/lib/analyze.functions";
 import {
   mockCountries,
   mockRecommendations,
@@ -142,13 +143,23 @@ type Dataset = {
 function makeFiltersFor(type: DatasetType, rows?: CampaignRow[]): DatasetFilters {
   if (type === "keyword")
     return {
-      campaigns: [], keywords: [], devices: [], countries: [],
-      minSpend: "", minClicks: "", minConversions: "", dateRange: "Last 30 days",
+      campaigns: [],
+      keywords: [],
+      devices: [],
+      countries: [],
+      minSpend: "",
+      minClicks: "",
+      minConversions: "",
+      dateRange: "Last 30 days",
     };
   if (type === "ad_group")
     return {
-      months: [], adGroups: [], devices: [],
-      minCost: "", minRevenue: "", negativeProfitOnly: false,
+      months: [],
+      adGroups: [],
+      devices: [],
+      minCost: "",
+      minRevenue: "",
+      negativeProfitOnly: false,
     };
   if (type === "market") {
     // Default platform to "Google Ads" when present in the uploaded data.
@@ -156,8 +167,12 @@ function makeFiltersFor(type: DatasetType, rows?: CampaignRow[]): DatasetFilters
     const hasGoogle = platforms.find((p) => /google ads/i.test(p));
     return {
       platforms: hasGoogle ? [hasGoogle] : [],
-      campaignTypes: [], countries: [], industries: [],
-      minCpa: "", minRoas: "", dateRange: "Last 30 days",
+      campaignTypes: [],
+      countries: [],
+      industries: [],
+      minCpa: "",
+      minRoas: "",
+      dateRange: "Last 30 days",
     };
   }
   return {};
@@ -192,7 +207,6 @@ function mockToBackendRec(r: Recommendation): BackendRecommendation {
     ruleTriggered: r.rule,
     expectedImpact: r.impact,
     confidence: r.confidence,
-    evidence: r.evidence,
     status: "pending",
   };
 }
@@ -201,13 +215,27 @@ function renderTextLike(v: unknown): string {
   if (v == null) return "";
   if (typeof v === "string") return v;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
+  // Handle backend evidence object
+  if (typeof v === "object" && !Array.isArray(v)) {
+    const obj = v as Record<string, unknown>;
+    // If it looks like a backend evidence object, format it nicely
+    if ("spend" in obj || "clicks" in obj || "conversions" in obj) {
+      const parts: string[] = [];
+      if (obj.spend != null) parts.push(`Spend: $${Number(obj.spend).toFixed(2)}`);
+      if (obj.clicks != null) parts.push(`Clicks: ${obj.clicks}`);
+      if (obj.conversions != null) parts.push(`Conv: ${obj.conversions}`);
+      if (obj.cpa != null) parts.push(`CPA: $${Number(obj.cpa).toFixed(2)}`);
+      if (obj.roas != null) parts.push(`ROAS: ${Number(obj.roas).toFixed(2)}`);
+      if (obj.profit != null) parts.push(`Profit: $${Number(obj.profit).toFixed(2)}`);
+      return parts.join(" · ");
+    }
+  }
   try {
     return JSON.stringify(v);
   } catch {
     return String(v);
   }
 }
-
 
 function AdPilotDashboard() {
   // ---------- Config state ----------
@@ -302,7 +330,12 @@ function AdPilotDashboard() {
   function updateDatasetFilters(id: string, patch: Partial<DatasetFilters>) {
     setDatasets((ds) =>
       ds.map((d) =>
-        d.id === id ? { ...d, filters: { ...(d.filters as Record<string, unknown>), ...patch } as DatasetFilters } : d,
+        d.id === id
+          ? {
+              ...d,
+              filters: { ...(d.filters as Record<string, unknown>), ...patch } as DatasetFilters,
+            }
+          : d,
       ),
     );
   }
@@ -339,6 +372,8 @@ function AdPilotDashboard() {
       return analysisResult.recommendations.map((r, i) => ({
         ...r,
         id: r.id ?? `rec-${i}`,
+        // Backend returns confidence as 35–98 integer; normalize to 0–1
+        confidence: (r.confidence ?? 0) > 1 ? (r.confidence ?? 0) / 100 : (r.confidence ?? 0),
       }));
     }
     if (!useDemoData) return [];
@@ -373,7 +408,6 @@ function AdPilotDashboard() {
     };
   }, [analysisResult, useDemoData]);
 
-
   const datasetTotals = useMemo(() => {
     let clicks = 0;
     let impressions = 0;
@@ -383,8 +417,14 @@ function AdPilotDashboard() {
       for (const row of d.rows as unknown as Record<string, unknown>[]) {
         const imp = Number(row?.impressions);
         const clk = Number(row?.clicks);
-        if (Number.isFinite(imp)) { impressions += imp; hasImpressions = true; }
-        if (Number.isFinite(clk)) { clicks += clk; hasClicks = true; }
+        if (Number.isFinite(imp)) {
+          impressions += imp;
+          hasImpressions = true;
+        }
+        if (Number.isFinite(clk)) {
+          clicks += clk;
+          hasClicks = true;
+        }
       }
     }
     return { clicks, impressions, hasImpressions, hasClicks };
@@ -478,7 +518,12 @@ function AdPilotDashboard() {
     // eslint-disable-next-line no-console
     console.log("[AdPilot] Analyze payload", payload);
     // eslint-disable-next-line no-console
-    console.log("[AdPilot] websiteUrl:", payload.websiteUrl, "marketingNotes:", payload.marketingNotes);
+    console.log(
+      "[AdPilot] websiteUrl:",
+      payload.websiteUrl,
+      "marketingNotes:",
+      payload.marketingNotes,
+    );
     try {
       const res = await analyzeAccountApi(payload);
       // eslint-disable-next-line no-console
@@ -516,12 +561,18 @@ function AdPilotDashboard() {
         { id, action: label, outcome, at: new Date().toLocaleString(), simulated: true },
         ...h,
       ]);
-      toast(outcome === "approved" ? "Approved (simulated)" : outcome === "rejected" ? "Rejected" : "Edited", {
-        description: label,
-      });
+      toast(
+        outcome === "approved"
+          ? "Approved (simulated)"
+          : outcome === "rejected"
+            ? "Rejected"
+            : "Edited",
+        {
+          description: label,
+        },
+      );
     }
   }
-
 
   const sourceLabel =
     enabledDatasets.length > 0
@@ -575,15 +626,25 @@ function AdPilotDashboard() {
                 {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
 
                 <div className="flex items-center justify-between rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
-                  <Label htmlFor="demo" className="text-sm">Use demo data</Label>
+                  <Label htmlFor="demo" className="text-sm">
+                    Use demo data
+                  </Label>
                   <Switch id="demo" checked={useDemoData} onCheckedChange={setUseDemoData} />
                 </div>
                 <div className="flex items-center justify-between rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
                   <div className="flex items-center gap-2">
-                    <Switch id="google" checked={googleExperimental} onCheckedChange={setGoogleExperimental} />
-                    <Label htmlFor="google" className="text-sm">Connect Google Ads</Label>
+                    <Switch
+                      id="google"
+                      checked={googleExperimental}
+                      onCheckedChange={setGoogleExperimental}
+                    />
+                    <Label htmlFor="google" className="text-sm">
+                      Connect Google Ads
+                    </Label>
                   </div>
-                  <Badge variant="outline" className="border-warning/50 text-warning">Experimental</Badge>
+                  <Badge variant="outline" className="border-warning/50 text-warning">
+                    Experimental
+                  </Badge>
                 </div>
 
                 {datasets.length > 0 && (
@@ -617,96 +678,209 @@ function AdPilotDashboard() {
                   <p className="mt-1 text-xs text-destructive">{websiteUrlError}</p>
                 )}
                 <FieldLabel>Marketing notes</FieldLabel>
-                <Textarea value={marketingNotes} onChange={(e) => setMarketingNotes(e.target.value)} rows={3} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
+                <Textarea
+                  value={marketingNotes}
+                  onChange={(e) => setMarketingNotes(e.target.value)}
+                  rows={3}
+                  className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                />
               </Section>
 
               <Section title="Business goal" icon={<Target className="h-4 w-4" />} defaultOpen>
                 <FieldLabel>Objective</FieldLabel>
                 <Select value={objective} onValueChange={setObjective}>
-                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {["leads", "sales", "traffic", "awareness"].map((o) => <SelectItem key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</SelectItem>)}
+                    {["leads", "sales", "traffic", "awareness"].map((o) => (
+                      <SelectItem key={o} value={o}>
+                        {o[0].toUpperCase() + o.slice(1)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <FieldLabel>Primary KPI</FieldLabel>
                 <Select value={primaryKpi} onValueChange={setPrimaryKpi}>
-                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {["CPA", "ROAS", "Conversions", "Revenue"].map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
+                    {["CPA", "ROAS", "Conversions", "Revenue"].map((k) => (
+                      <SelectItem key={k} value={k}>
+                        {k}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <FieldLabel>Target KPI value</FieldLabel>
-                <Input value={targetKpi} onChange={(e) => setTargetKpi(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
+                <Input
+                  value={targetKpi}
+                  onChange={(e) => setTargetKpi(e.target.value)}
+                  className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                />
                 <FieldLabel>Budget</FieldLabel>
                 <div className="flex gap-2">
-                  <Select value={budgetPeriod} onValueChange={(v) => setBudgetPeriod(v as typeof budgetPeriod)}>
-                    <SelectTrigger className="w-28 bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
+                  <Select
+                    value={budgetPeriod}
+                    onValueChange={(v) => setBudgetPeriod(v as typeof budgetPeriod)}
+                  >
+                    <SelectTrigger className="w-28 bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="daily">Daily</SelectItem>
                       <SelectItem value="monthly">Monthly</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Input value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
+                  <Input
+                    value={budgetAmount}
+                    onChange={(e) => setBudgetAmount(e.target.value)}
+                    className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                  />
                 </div>
                 <FieldLabel>Target country</FieldLabel>
                 <Select value={targetCountry} onValueChange={setTargetCountry}>
-                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {mockCountries.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {mockCountries.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <FieldLabel>Conversion type</FieldLabel>
-                <Input value={conversionType} onChange={(e) => setConversionType(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
+                <Input
+                  value={conversionType}
+                  onChange={(e) => setConversionType(e.target.value)}
+                  className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                />
               </Section>
 
               <Section title="Global filters" icon={<Filter className="h-4 w-4" />}>
                 <FieldLabel>Date range</FieldLabel>
                 <Select value={dateRange} onValueChange={setDateRange}>
-                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {["Last 7 days", "Last 30 days", "Last 90 days", "This quarter"].map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    {["Last 7 days", "Last 30 days", "Last 90 days", "This quarter"].map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <FieldLabel>Match type</FieldLabel>
                 <Select value={matchType} onValueChange={setMatchType}>
-                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {["All", "Exact", "Phrase", "Broad"].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                    {["All", "Exact", "Phrase", "Broad"].map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <div className="grid grid-cols-2 gap-2">
-                  <div><FieldLabel>Min impressions</FieldLabel><Input value={minImpressions} onChange={(e) => setMinImpressions(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" /></div>
-                  <div><FieldLabel>Min clicks</FieldLabel><Input value={minClicks} onChange={(e) => setMinClicks(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" /></div>
-                  <div><FieldLabel>Min spend</FieldLabel><Input value={minSpend} onChange={(e) => setMinSpend(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" /></div>
-                  <div><FieldLabel>Min conversions</FieldLabel><Input value={minConversions} onChange={(e) => setMinConversions(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" /></div>
+                  <div>
+                    <FieldLabel>Min impressions</FieldLabel>
+                    <Input
+                      value={minImpressions}
+                      onChange={(e) => setMinImpressions(e.target.value)}
+                      className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Min clicks</FieldLabel>
+                    <Input
+                      value={minClicks}
+                      onChange={(e) => setMinClicks(e.target.value)}
+                      className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Min spend</FieldLabel>
+                    <Input
+                      value={minSpend}
+                      onChange={(e) => setMinSpend(e.target.value)}
+                      className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Min conversions</FieldLabel>
+                    <Input
+                      value={minConversions}
+                      onChange={(e) => setMinConversions(e.target.value)}
+                      className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                    />
+                  </div>
                 </div>
                 <div className="mt-2 flex items-center justify-between rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
-                  <Label htmlFor="zero" className="text-sm">Zero-conversion items only</Label>
+                  <Label htmlFor="zero" className="text-sm">
+                    Zero-conversion items only
+                  </Label>
                   <Switch id="zero" checked={zeroConvOnly} onCheckedChange={setZeroConvOnly} />
                 </div>
-                <FieldLabel>Min confidence: <span className="text-primary">{Math.round(minConfidence[0] * 100)}%</span></FieldLabel>
-                <Slider value={minConfidence} onValueChange={setMinConfidence} min={0} max={1} step={0.05} />
+                <FieldLabel>
+                  Min confidence:{" "}
+                  <span className="text-primary">{Math.round(minConfidence[0] * 100)}%</span>
+                </FieldLabel>
+                <Slider
+                  value={minConfidence}
+                  onValueChange={setMinConfidence}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                />
               </Section>
 
               <Section title="Decision rules" icon={<Settings2 className="h-4 w-4" />}>
                 <FieldLabel>Zero-conversion spend threshold ($)</FieldLabel>
-                <Input value={zeroConvSpend} onChange={(e) => setZeroConvSpend(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
+                <Input
+                  value={zeroConvSpend}
+                  onChange={(e) => setZeroConvSpend(e.target.value)}
+                  className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                />
                 <FieldLabel>High CPA threshold (% of target)</FieldLabel>
-                <Input value={highCpaPct} onChange={(e) => setHighCpaPct(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
+                <Input
+                  value={highCpaPct}
+                  onChange={(e) => setHighCpaPct(e.target.value)}
+                  className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                />
                 <FieldLabel>Maximum bid change (%)</FieldLabel>
-                <Input value={maxBidChange} onChange={(e) => setMaxBidChange(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
+                <Input
+                  value={maxBidChange}
+                  onChange={(e) => setMaxBidChange(e.target.value)}
+                  className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                />
                 <FieldLabel>Maximum budget change (%)</FieldLabel>
-                <Input value={maxBudgetChange} onChange={(e) => setMaxBudgetChange(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
+                <Input
+                  value={maxBudgetChange}
+                  onChange={(e) => setMaxBudgetChange(e.target.value)}
+                  className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"
+                />
               </Section>
 
               <Section title="Action mode" icon={<Activity className="h-4 w-4" />} defaultOpen>
-                <RadioGroup value={actionMode} onValueChange={(v) => setActionMode(v as typeof actionMode)} className="space-y-2">
+                <RadioGroup
+                  value={actionMode}
+                  onValueChange={(v) => setActionMode(v as typeof actionMode)}
+                  className="space-y-2"
+                >
                   <RadioRow value="insights" id="am-i" label="Insights only" />
                   <RadioRow value="approval" id="am-a" label="Approval required" />
                   <div className="flex items-center justify-between rounded-md border border-sidebar-border bg-sidebar-accent/20 p-2 opacity-60">
                     <div className="flex items-center gap-2">
                       <RadioGroupItem value="automatic" id="am-auto" disabled />
-                      <Label htmlFor="am-auto" className="text-sm">Automatic</Label>
+                      <Label htmlFor="am-auto" className="text-sm">
+                        Automatic
+                      </Label>
                     </div>
                     <Badge variant="outline">Coming soon</Badge>
                   </div>
@@ -720,13 +894,19 @@ function AdPilotDashboard() {
         <main className="min-w-0 flex-1">
           <header className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border bg-background/80 px-4 py-4 backdrop-blur sm:px-6 lg:flex lg:flex-wrap lg:justify-between">
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">Account analysis</h1>
+              <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">
+                Account analysis
+              </h1>
               <p className="truncate text-sm text-muted-foreground">
                 {sourceLabel} · {dateRange}
               </p>
             </div>
             <Button size="lg" onClick={handleAnalyze} disabled={analyzing} className="shrink-0">
-              {analyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+              {analyzing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="mr-2 h-4 w-4" />
+              )}
               {analyzing ? "Analyzing…" : "Analyze account"}
             </Button>
           </header>
@@ -810,19 +990,20 @@ function AdPilotDashboard() {
                 <Sparkles className="h-4 w-4 text-warning" />
                 <AlertTitle>Demo Results — real analysis is not connected yet.</AlertTitle>
                 <AlertDescription>
-                  The metrics and recommendations below are fixed sample data. Click Analyze
-                  account to run a live analysis on the uploaded CSVs.
+                  The metrics and recommendations below are fixed sample data. Click Analyze account
+                  to run a live analysis on the uploaded CSVs.
                 </AlertDescription>
               </Alert>
             )}
 
-            {analysisResult && (analysisResult.websiteContext || (analysisResult.websiteRecommendations?.length ?? 0) > 0) && (
-              <WebsiteAnalysisCard
-                context={analysisResult.websiteContext}
-                recommendations={analysisResult.websiteRecommendations}
-              />
-            )}
-
+            {analysisResult &&
+              (analysisResult.websiteContext ||
+                (analysisResult.websiteRecommendations?.length ?? 0) > 0) && (
+                <WebsiteAnalysisCard
+                  context={analysisResult.websiteContext}
+                  recommendations={analysisResult.websiteRecommendations}
+                />
+              )}
 
             {!summary.trackingHealthy && (
               <Alert className="border-warning/40 bg-warning/10 text-foreground">
@@ -843,21 +1024,40 @@ function AdPilotDashboard() {
 
             <div className="grid gap-4 lg:grid-cols-3">
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Filtered results</CardTitle></CardHeader>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Filtered results
+                  </CardTitle>
+                </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-semibold">{filtered.length}</div>
-                  <p className="mt-1 text-xs text-muted-foreground">of {displayRecs.length} total · ≥ {Math.round(minConfidence[0] * 100)}% confidence</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    of {displayRecs.length} total · ≥ {Math.round(minConfidence[0] * 100)}%
+                    confidence
+                  </p>
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Estimated wasted spend</CardTitle></CardHeader>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Estimated wasted spend
+                  </CardTitle>
+                </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-semibold text-destructive">${summary.wastedSpend.toLocaleString()}</div>
-                  <p className="mt-1 text-xs text-muted-foreground">Across zero-conversion keywords & irrelevant terms</p>
+                  <div className="text-3xl font-semibold text-destructive">
+                    ${summary.wastedSpend.toLocaleString()}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Across zero-conversion keywords & irrelevant terms
+                  </p>
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Goal progress · {primaryKpi}</CardTitle></CardHeader>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Goal progress · {primaryKpi}
+                  </CardTitle>
+                </CardHeader>
                 <CardContent>
                   <div className="mb-2 flex items-baseline justify-between">
                     <span className="text-3xl font-semibold">{goalProgress}%</span>
@@ -870,25 +1070,54 @@ function AdPilotDashboard() {
 
             <Tabs defaultValue="summary" className="w-full">
               <TabsList className="flex w-full flex-wrap justify-start gap-1">
-                <TabsTrigger value="summary"><Sparkles className="mr-1 h-3.5 w-3.5" />Executive summary</TabsTrigger>
-                <TabsTrigger value="keywords"><Lightbulb className="mr-1 h-3.5 w-3.5" />Keywords</TabsTrigger>
-                <TabsTrigger value="ad_groups"><Layers className="mr-1 h-3.5 w-3.5" />Ad groups</TabsTrigger>
-                <TabsTrigger value="markets"><BarChart3 className="mr-1 h-3.5 w-3.5" />Markets</TabsTrigger>
-                <TabsTrigger value="risks"><AlertTriangle className="mr-1 h-3.5 w-3.5" />Risks</TabsTrigger>
-                <TabsTrigger value="history"><History className="mr-1 h-3.5 w-3.5" />Action history</TabsTrigger>
+                <TabsTrigger value="summary">
+                  <Sparkles className="mr-1 h-3.5 w-3.5" />
+                  Executive summary
+                </TabsTrigger>
+                <TabsTrigger value="keywords">
+                  <Lightbulb className="mr-1 h-3.5 w-3.5" />
+                  Keywords
+                </TabsTrigger>
+                <TabsTrigger value="ad_groups">
+                  <Layers className="mr-1 h-3.5 w-3.5" />
+                  Ad groups
+                </TabsTrigger>
+                <TabsTrigger value="markets">
+                  <BarChart3 className="mr-1 h-3.5 w-3.5" />
+                  Markets
+                </TabsTrigger>
+                <TabsTrigger value="risks">
+                  <AlertTriangle className="mr-1 h-3.5 w-3.5" />
+                  Risks
+                </TabsTrigger>
+                <TabsTrigger value="history">
+                  <History className="mr-1 h-3.5 w-3.5" />
+                  Action history
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="summary" className="mt-4 space-y-3">
                 <Card>
-                  <CardHeader><CardTitle className="text-base">Top recommendations across all datasets</CardTitle></CardHeader>
+                  <CardHeader>
+                    <CardTitle className="text-base">
+                      Top recommendations across all datasets
+                    </CardTitle>
+                  </CardHeader>
                   <CardContent className="space-y-3">
                     {filtered.slice(0, 4).map((r) => (
-                      <div key={r.id} className="flex items-start justify-between gap-3 border-b pb-3 last:border-0 last:pb-0">
+                      <div
+                        key={r.id}
+                        className="flex items-start justify-between gap-3 border-b pb-3 last:border-0 last:pb-0"
+                      >
                         <div className="min-w-0">
                           <div className="text-sm font-medium">{r.title ?? "Recommendation"}</div>
-                          <div className="truncate text-xs text-muted-foreground">{r.target ?? r.campaign ?? ""}</div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {r.target ?? r.campaign ?? ""}
+                          </div>
                         </div>
-                        <Badge variant="outline" className="shrink-0">{Math.round((r.confidence ?? 0) * 100)}%</Badge>
+                        <Badge variant="outline" className="shrink-0">
+                          {Math.round((r.confidence ?? 0) * 100)}%
+                        </Badge>
                       </div>
                     ))}
 
@@ -905,7 +1134,12 @@ function AdPilotDashboard() {
                       <EmptyState />
                     ) : (
                       recs.map((r) => (
-                        <RecCard key={r.id ?? ""} rec={r} status={status[r.id ?? ""]} onDecide={decide} />
+                        <RecCard
+                          key={r.id ?? ""}
+                          rec={r}
+                          status={status[r.id ?? ""]}
+                          onDecide={decide}
+                        />
                       ))
                     )}
                   </TabsContent>
@@ -914,7 +1148,11 @@ function AdPilotDashboard() {
 
               <TabsContent value="history" className="mt-4">
                 {history.length === 0 ? (
-                  <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No actions taken yet.</CardContent></Card>
+                  <Card>
+                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                      No actions taken yet.
+                    </CardContent>
+                  </Card>
                 ) : (
                   <Card>
                     <CardContent className="divide-y p-0">
@@ -927,12 +1165,16 @@ function AdPilotDashboard() {
                               {h.outcome === "approved" && h.simulated && " · simulated execution"}
                             </div>
                           </div>
-                          <Badge variant={h.outcome === "approved" ? "default" : "secondary"} className={cn(h.outcome === "approved" && "bg-success text-success-foreground")}>
+                          <Badge
+                            variant={h.outcome === "approved" ? "default" : "secondary"}
+                            className={cn(
+                              h.outcome === "approved" && "bg-success text-success-foreground",
+                            )}
+                          >
                             {h.outcome === "approved" ? "approved (simulated)" : h.outcome}
                           </Badge>
                         </div>
                       ))}
-
                     </CardContent>
                   </Card>
                 )}
@@ -960,7 +1202,12 @@ function DatasetCard({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className={cn("rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2", !dataset.enabled && "opacity-60")}>
+    <div
+      className={cn(
+        "rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2",
+        !dataset.enabled && "opacity-60",
+      )}
+    >
       <div className="flex items-start gap-2">
         <Switch checked={dataset.enabled} onCheckedChange={(v) => onChange({ enabled: v })} />
         <div className="min-w-0 flex-1">
@@ -977,10 +1224,14 @@ function DatasetCard({
               value={dataset.datasetType}
               onValueChange={(v) => onChange({ datasetType: v as DatasetType })}
             >
-              <SelectTrigger className="h-7 bg-sidebar text-sidebar-foreground placeholder:text-sidebar-foreground/50 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-7 bg-sidebar text-sidebar-foreground placeholder:text-sidebar-foreground/50 text-xs">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {(Object.keys(DATASET_LABELS) as DatasetType[]).map((t) => (
-                  <SelectItem key={t} value={t}>{DATASET_LABELS[t]}</SelectItem>
+                  <SelectItem key={t} value={t}>
+                    {DATASET_LABELS[t]}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -997,14 +1248,24 @@ function DatasetCard({
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-3 pt-2">
           <div>
-            <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">Detected columns</div>
+            <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">
+              Detected columns
+            </div>
             <div className="flex flex-wrap gap-1">
               {dataset.columns.map((h) => (
-                <Badge key={h} variant="outline" className="text-[10px] text-sidebar-foreground border-sidebar-foreground/30">{h}</Badge>
+                <Badge
+                  key={h}
+                  variant="outline"
+                  className="text-[10px] text-sidebar-foreground border-sidebar-foreground/30"
+                >
+                  {h}
+                </Badge>
               ))}
             </div>
           </div>
-          {dataset.enabled && <DatasetFilterControls dataset={dataset} onFiltersChange={onFiltersChange} />}
+          {dataset.enabled && (
+            <DatasetFilterControls dataset={dataset} onFiltersChange={onFiltersChange} />
+          )}
           <DatasetPreview dataset={dataset} />
         </CollapsibleContent>
       </Collapsible>
@@ -1024,14 +1285,46 @@ function DatasetFilterControls({
     const f = dataset.filters as KeywordFilters;
     return (
       <div className="space-y-2">
-        <MultiOpt label="Campaign" opts={extractUnique(dataset.rows, "campaign")} value={f.campaigns} onChange={(v) => onFiltersChange({ campaigns: v })} />
-        <MultiOpt label="Keyword" opts={extractUnique(dataset.rows, "keyword")} value={f.keywords} onChange={(v) => onFiltersChange({ keywords: v })} />
-        <MultiOpt label="Device" opts={extractUnique(dataset.rows, "device")} value={f.devices} onChange={(v) => onFiltersChange({ devices: v })} />
-        <MultiOpt label="Location" opts={extractUnique(dataset.rows, "country")} value={f.countries} onChange={(v) => onFiltersChange({ countries: v })} />
+        <MultiOpt
+          label="Campaign"
+          opts={extractUnique(dataset.rows, "campaign")}
+          value={f.campaigns}
+          onChange={(v) => onFiltersChange({ campaigns: v })}
+        />
+        <MultiOpt
+          label="Keyword"
+          opts={extractUnique(dataset.rows, "keyword")}
+          value={f.keywords}
+          onChange={(v) => onFiltersChange({ keywords: v })}
+        />
+        <MultiOpt
+          label="Device"
+          opts={extractUnique(dataset.rows, "device")}
+          value={f.devices}
+          onChange={(v) => onFiltersChange({ devices: v })}
+        />
+        <MultiOpt
+          label="Location"
+          opts={extractUnique(dataset.rows, "country")}
+          value={f.countries}
+          onChange={(v) => onFiltersChange({ countries: v })}
+        />
         <NumGrid>
-          <NumIn label="Min spend" value={f.minSpend} onChange={(v) => onFiltersChange({ minSpend: v })} />
-          <NumIn label="Min clicks" value={f.minClicks} onChange={(v) => onFiltersChange({ minClicks: v })} />
-          <NumIn label="Min conversions" value={f.minConversions} onChange={(v) => onFiltersChange({ minConversions: v })} />
+          <NumIn
+            label="Min spend"
+            value={f.minSpend}
+            onChange={(v) => onFiltersChange({ minSpend: v })}
+          />
+          <NumIn
+            label="Min clicks"
+            value={f.minClicks}
+            onChange={(v) => onFiltersChange({ minClicks: v })}
+          />
+          <NumIn
+            label="Min conversions"
+            value={f.minConversions}
+            onChange={(v) => onFiltersChange({ minConversions: v })}
+          />
         </NumGrid>
         <DateRangeSelect value={f.dateRange} onChange={(v) => onFiltersChange({ dateRange: v })} />
       </div>
@@ -1041,16 +1334,42 @@ function DatasetFilterControls({
     const f = dataset.filters as AdGroupFilters;
     return (
       <div className="space-y-2">
-        <MultiOpt label="Month" opts={extractUnique(dataset.rows, "month")} value={f.months} onChange={(v) => onFiltersChange({ months: v })} />
-        <MultiOpt label="Ad group" opts={extractUnique(dataset.rows, "ad_group")} value={f.adGroups} onChange={(v) => onFiltersChange({ adGroups: v })} />
-        <MultiOpt label="Device" opts={extractUnique(dataset.rows, "device")} value={f.devices} onChange={(v) => onFiltersChange({ devices: v })} />
+        <MultiOpt
+          label="Month"
+          opts={extractUnique(dataset.rows, "month")}
+          value={f.months}
+          onChange={(v) => onFiltersChange({ months: v })}
+        />
+        <MultiOpt
+          label="Ad group"
+          opts={extractUnique(dataset.rows, "ad_group")}
+          value={f.adGroups}
+          onChange={(v) => onFiltersChange({ adGroups: v })}
+        />
+        <MultiOpt
+          label="Device"
+          opts={extractUnique(dataset.rows, "device")}
+          value={f.devices}
+          onChange={(v) => onFiltersChange({ devices: v })}
+        />
         <NumGrid>
-          <NumIn label="Min cost" value={f.minCost} onChange={(v) => onFiltersChange({ minCost: v })} />
-          <NumIn label="Min revenue" value={f.minRevenue} onChange={(v) => onFiltersChange({ minRevenue: v })} />
+          <NumIn
+            label="Min cost"
+            value={f.minCost}
+            onChange={(v) => onFiltersChange({ minCost: v })}
+          />
+          <NumIn
+            label="Min revenue"
+            value={f.minRevenue}
+            onChange={(v) => onFiltersChange({ minRevenue: v })}
+          />
         </NumGrid>
         <label className="flex cursor-pointer items-center justify-between rounded-md border border-sidebar-border bg-sidebar p-2 text-xs">
           <span>Negative profit only</span>
-          <Switch checked={f.negativeProfitOnly} onCheckedChange={(v) => onFiltersChange({ negativeProfitOnly: v })} />
+          <Switch
+            checked={f.negativeProfitOnly}
+            onCheckedChange={(v) => onFiltersChange({ negativeProfitOnly: v })}
+          />
         </label>
       </div>
     );
@@ -1059,26 +1378,68 @@ function DatasetFilterControls({
     const f = dataset.filters as MarketFilters;
     return (
       <div className="space-y-2">
-        <MultiOpt label="Platform" opts={extractUnique(dataset.rows, "platform")} value={f.platforms} onChange={(v) => onFiltersChange({ platforms: v })} />
-        <MultiOpt label="Campaign type" opts={extractUnique(dataset.rows, "campaign_type")} value={f.campaignTypes} onChange={(v) => onFiltersChange({ campaignTypes: v })} />
-        <MultiOpt label="Country" opts={extractUnique(dataset.rows, "country")} value={f.countries} onChange={(v) => onFiltersChange({ countries: v })} />
-        <MultiOpt label="Industry" opts={extractUnique(dataset.rows, "industry")} value={f.industries} onChange={(v) => onFiltersChange({ industries: v })} />
+        <MultiOpt
+          label="Platform"
+          opts={extractUnique(dataset.rows, "platform")}
+          value={f.platforms}
+          onChange={(v) => onFiltersChange({ platforms: v })}
+        />
+        <MultiOpt
+          label="Campaign type"
+          opts={extractUnique(dataset.rows, "campaign_type")}
+          value={f.campaignTypes}
+          onChange={(v) => onFiltersChange({ campaignTypes: v })}
+        />
+        <MultiOpt
+          label="Country"
+          opts={extractUnique(dataset.rows, "country")}
+          value={f.countries}
+          onChange={(v) => onFiltersChange({ countries: v })}
+        />
+        <MultiOpt
+          label="Industry"
+          opts={extractUnique(dataset.rows, "industry")}
+          value={f.industries}
+          onChange={(v) => onFiltersChange({ industries: v })}
+        />
         <NumGrid>
-          <NumIn label="Min CPA" value={f.minCpa} onChange={(v) => onFiltersChange({ minCpa: v })} />
-          <NumIn label="Min ROAS" value={f.minRoas} onChange={(v) => onFiltersChange({ minRoas: v })} />
+          <NumIn
+            label="Min CPA"
+            value={f.minCpa}
+            onChange={(v) => onFiltersChange({ minCpa: v })}
+          />
+          <NumIn
+            label="Min ROAS"
+            value={f.minRoas}
+            onChange={(v) => onFiltersChange({ minRoas: v })}
+          />
         </NumGrid>
         <DateRangeSelect value={f.dateRange} onChange={(v) => onFiltersChange({ dateRange: v })} />
       </div>
     );
   }
-  return <p className="text-[11px] text-sidebar-foreground/60">Set a dataset type to enable filters.</p>;
+  return (
+    <p className="text-[11px] text-sidebar-foreground/60">Set a dataset type to enable filters.</p>
+  );
 }
 
-function MultiOpt({ label, opts, value, onChange }: { label: string; opts: string[]; value: string[]; onChange: (v: string[]) => void }) {
+function MultiOpt({
+  label,
+  opts,
+  value,
+  onChange,
+}: {
+  label: string;
+  opts: string[];
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
   if (!opts.length) return null;
   return (
     <div>
-      <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">{label}</div>
+      <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">
+        {label}
+      </div>
       <MultiCheckList options={opts} value={value} onChange={onChange} />
     </div>
   );
@@ -1088,11 +1449,23 @@ function NumGrid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-2 gap-2">{children}</div>;
 }
 
-function NumIn({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function NumIn({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <div>
       <Label className="mb-1 block text-[11px] text-sidebar-foreground/60">{label}</Label>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} className="h-7 bg-sidebar text-sidebar-foreground placeholder:text-sidebar-foreground/50 text-xs" />
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-7 bg-sidebar text-sidebar-foreground placeholder:text-sidebar-foreground/50 text-xs"
+      />
     </div>
   );
 }
@@ -1102,10 +1475,14 @@ function DateRangeSelect({ value, onChange }: { value: string; onChange: (v: str
     <div>
       <Label className="mb-1 block text-[11px] text-sidebar-foreground/60">Date range</Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-7 bg-sidebar text-sidebar-foreground placeholder:text-sidebar-foreground/50 text-xs"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-7 bg-sidebar text-sidebar-foreground placeholder:text-sidebar-foreground/50 text-xs">
+          <SelectValue />
+        </SelectTrigger>
         <SelectContent>
           {["Last 7 days", "Last 30 days", "Last 90 days", "This quarter", "All time"].map((d) => (
-            <SelectItem key={d} value={d}>{d}</SelectItem>
+            <SelectItem key={d} value={d}>
+              {d}
+            </SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -1118,13 +1495,20 @@ function DatasetPreview({ dataset }: { dataset: Dataset }) {
   if (!preview.length) return null;
   return (
     <div>
-      <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">First 5 rows</div>
+      <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">
+        First 5 rows
+      </div>
       <div className="overflow-x-auto rounded-md border border-sidebar-border bg-sidebar">
         <table className="w-full text-[10px]">
           <thead className="bg-sidebar-accent/60">
             <tr>
               {dataset.columns.map((c) => (
-                <th key={c} className="whitespace-nowrap px-2 py-1 text-left font-medium text-sidebar-foreground/70">{c}</th>
+                <th
+                  key={c}
+                  className="whitespace-nowrap px-2 py-1 text-left font-medium text-sidebar-foreground/70"
+                >
+                  {c}
+                </th>
               ))}
             </tr>
           </thead>
@@ -1133,9 +1517,11 @@ function DatasetPreview({ dataset }: { dataset: Dataset }) {
               <tr key={i} className="border-t border-sidebar-border">
                 {dataset.columns.map((c) => (
                   <td key={c} className="whitespace-nowrap px-2 py-1 text-sidebar-foreground/80">
-                    {row[c] === null || row[c] === undefined || row[c] === ""
-                      ? <span className="text-sidebar-foreground/30">—</span>
-                      : String(row[c])}
+                    {row[c] === null || row[c] === undefined || row[c] === "" ? (
+                      <span className="text-sidebar-foreground/30">—</span>
+                    ) : (
+                      String(row[c])
+                    )}
                   </td>
                 ))}
               </tr>
@@ -1149,7 +1535,9 @@ function DatasetPreview({ dataset }: { dataset: Dataset }) {
         <StatBox label="Invalid dates" value={dataset.stats.invalidDates.toLocaleString()} />
       </div>
       <div className="mt-2">
-        <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">Missing values by column</div>
+        <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">
+          Missing values by column
+        </div>
         <div className="flex flex-wrap gap-1">
           {dataset.columns.map((c) => {
             const n = dataset.stats.missingByColumn[c] ?? 0;
@@ -1179,13 +1567,24 @@ function StatBox({ label, value }: { label: string; value: string }) {
 }
 
 function Section({
-  title, icon, defaultOpen, children,
-}: { title: string; icon: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode }) {
+  title,
+  icon,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
   const [open, setOpen] = useState(!!defaultOpen);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/70 hover:bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50">
-        <span className="flex items-center gap-2">{icon}{title}</span>
+        <span className="flex items-center gap-2">
+          {icon}
+          {title}
+        </span>
         <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-2 px-2 pb-3 pt-1">{children}</CollapsibleContent>
@@ -1201,24 +1600,37 @@ function RadioRow({ value, id, label }: { value: string; id: string; label: Reac
   return (
     <div className="flex items-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
       <RadioGroupItem value={value} id={id} />
-      <Label htmlFor={id} className="text-sm">{label}</Label>
+      <Label htmlFor={id} className="text-sm">
+        {label}
+      </Label>
     </div>
   );
 }
 
 function MultiCheckList({
-  options, value, onChange,
-}: { options: string[]; value: string[]; onChange: (v: string[]) => void }) {
+  options,
+  value,
+  onChange,
+}: {
+  options: string[];
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
   if (!options.length) return null;
   return (
     <div className="space-y-1 rounded-md border border-sidebar-border bg-sidebar p-2">
       {options.map((opt) => {
         const checked = value.includes(opt);
         return (
-          <label key={opt} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-sidebar-accent">
+          <label
+            key={opt}
+            className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-sidebar-accent"
+          >
             <Checkbox
               checked={checked}
-              onCheckedChange={(c) => onChange(c ? [...value, opt] : value.filter((v) => v !== opt))}
+              onCheckedChange={(c) =>
+                onChange(c ? [...value, opt] : value.filter((v) => v !== opt))
+              }
             />
             <span className="truncate">{opt}</span>
           </label>
@@ -1245,47 +1657,81 @@ function EmptyState() {
       <CardContent className="flex flex-col items-center justify-center gap-2 py-10 text-center">
         <BarChart3 className="h-8 w-8 text-muted-foreground" />
         <div className="text-sm font-medium">Nothing here yet</div>
-        <p className="text-xs text-muted-foreground">Lower the confidence threshold or run a new analysis.</p>
+        <p className="text-xs text-muted-foreground">
+          Lower the confidence threshold or run a new analysis.
+        </p>
       </CardContent>
     </Card>
   );
 }
 
 function RecCard({
-  rec, status, onDecide,
-}: { rec: BackendRecommendation; status?: ActionStatus; onDecide: (id: string, s: ActionStatus) => void }) {
+  rec,
+  status,
+  onDecide,
+}: {
+  rec: BackendRecommendation;
+  status?: ActionStatus;
+  onDecide: (id: string, s: ActionStatus) => void;
+}) {
   const id = rec.id ?? "";
   return (
-    <Card className={cn("transition", status === "approved" && "border-success/50", status === "rejected" && "opacity-60")}>
+    <Card
+      className={cn(
+        "transition",
+        status === "approved" && "border-success/50",
+        status === "rejected" && "opacity-60",
+      )}
+    >
       <CardContent className="p-4 sm:p-5">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               {rec.datasetType && (
-                <Badge variant="secondary" className="capitalize">{rec.datasetType.replace(/_/g, " ")}</Badge>
+                <Badge variant="secondary" className="capitalize">
+                  {rec.datasetType.replace(/_/g, " ")}
+                </Badge>
               )}
               {rec.category && (
-                <Badge variant="outline" className="capitalize">{rec.category}</Badge>
+                <Badge variant="outline" className="capitalize">
+                  {rec.category}
+                </Badge>
               )}
               {rec.ruleTriggered && (
-                <Badge variant="outline" className="border-primary/40 text-primary">{rec.ruleTriggered}</Badge>
+                <Badge variant="outline" className="border-primary/40 text-primary">
+                  {rec.ruleTriggered}
+                </Badge>
               )}
               {rec.status && (
-                <Badge variant="outline" className="capitalize">{rec.status}</Badge>
+                <Badge variant="outline" className="capitalize">
+                  {rec.status}
+                </Badge>
               )}
               {status && (
-                <Badge className={cn(
-                  status === "approved" && "bg-success text-success-foreground",
-                  status === "rejected" && "bg-destructive text-destructive-foreground",
-                )}>
+                <Badge
+                  className={cn(
+                    status === "approved" && "bg-success text-success-foreground",
+                    status === "rejected" && "bg-destructive text-destructive-foreground",
+                  )}
+                >
                   {status === "approved" ? "Approved (simulated)" : status}
                 </Badge>
               )}
             </div>
-            <div className="text-base font-semibold leading-snug sm:text-lg">{rec.title ?? "Recommendation"}</div>
+            <div className="text-base font-semibold leading-snug sm:text-lg">
+              {rec.title ?? "Recommendation"}
+            </div>
             <div className="mt-1 grid gap-0.5 text-xs text-muted-foreground">
-              {rec.target && <div className="truncate"><span className="font-medium text-foreground/70">Target:</span> {rec.target}</div>}
-              {rec.campaign && <div className="truncate"><span className="font-medium text-foreground/70">Campaign:</span> {rec.campaign}</div>}
+              {rec.target && (
+                <div className="truncate">
+                  <span className="font-medium text-foreground/70">Target:</span> {rec.target}
+                </div>
+              )}
+              {rec.campaign && (
+                <div className="truncate">
+                  <span className="font-medium text-foreground/70">Campaign:</span> {rec.campaign}
+                </div>
+              )}
             </div>
           </div>
           <ConfidenceBadge value={rec.confidence ?? 0} />
@@ -1294,33 +1740,48 @@ function RecCard({
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {(rec.reason || rec.evidence) && (
             <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Reason / evidence</div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                Reason / evidence
+              </div>
               {rec.reason && <p className="mt-1 text-sm">{renderTextLike(rec.reason)}</p>}
-              {rec.evidence && rec.evidence !== rec.reason && (
+              {rec.evidence && (
                 <p className="mt-1 text-xs text-muted-foreground">{renderTextLike(rec.evidence)}</p>
               )}
             </div>
           )}
           {rec.expectedImpact && (
             <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Expected impact</div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                Expected impact
+              </div>
               <p className="mt-1 text-sm font-medium text-success">{rec.expectedImpact}</p>
             </div>
           )}
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => onDecide(id, "approved")} disabled={status === "approved"}>
+          <Button
+            size="sm"
+            onClick={() => onDecide(id, "approved")}
+            disabled={status === "approved"}
+          >
             <Check className="mr-1 h-4 w-4" /> Approve
           </Button>
-          <Button size="sm" variant="outline" onClick={() => onDecide(id, "rejected")} disabled={status === "rejected"}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onDecide(id, "rejected")}
+            disabled={status === "rejected"}
+          >
             <X className="mr-1 h-4 w-4" /> Reject
           </Button>
           <Button size="sm" variant="ghost" onClick={() => onDecide(id, "pending")}>
             <PencilLine className="mr-1 h-4 w-4" /> Edit
           </Button>
           {status === "approved" && (
-            <Badge variant="outline" className="ml-auto text-[10px]">Simulated execution</Badge>
+            <Badge variant="outline" className="ml-auto text-[10px]">
+              Simulated execution
+            </Badge>
           )}
         </div>
       </CardContent>
@@ -1328,10 +1789,14 @@ function RecCard({
   );
 }
 
-
 function ConfidenceBadge({ value }: { value: number }) {
   const pct = Math.round(value * 100);
-  const tone = value >= 0.85 ? "bg-success text-success-foreground" : value >= 0.7 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground";
+  const tone =
+    value >= 0.85
+      ? "bg-success text-success-foreground"
+      : value >= 0.7
+        ? "bg-primary text-primary-foreground"
+        : "bg-muted text-muted-foreground";
   return (
     <div className={cn("shrink-0 rounded-md px-2.5 py-1 text-center", tone)}>
       <div className="text-xs uppercase tracking-wide opacity-80">Conf</div>
@@ -1373,9 +1838,7 @@ function WebsiteAnalysisCard({
                 <Badge variant="outline">Status: {renderTextLike(context.fetchStatus)}</Badge>
               )}
               {typeof context?.hasClearCta === "boolean" && (
-                <Badge variant="outline">
-                  Clear CTA: {context.hasClearCta ? "Yes" : "No"}
-                </Badge>
+                <Badge variant="outline">Clear CTA: {context.hasClearCta ? "Yes" : "No"}</Badge>
               )}
             </div>
             {context?.title && (
@@ -1386,7 +1849,9 @@ function WebsiteAnalysisCard({
             )}
             {context?.businessSummary && (
               <div>
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Business summary</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Business summary
+                </div>
                 <p className="whitespace-pre-wrap">{renderTextLike(context.businessSummary)}</p>
               </div>
             )}
@@ -1395,14 +1860,18 @@ function WebsiteAnalysisCard({
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Topics</div>
                 <div className="mt-1 flex flex-wrap gap-1">
                   {topics.map((t, i) => (
-                    <Badge key={`topic-${i}`} variant="secondary">{renderTextLike(t)}</Badge>
+                    <Badge key={`topic-${i}`} variant="secondary">
+                      {renderTextLike(t)}
+                    </Badge>
                   ))}
                 </div>
               </div>
             )}
             {headings.length > 0 && (
               <div>
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Headings</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Headings
+                </div>
                 <ul className="list-disc pl-5">
                   {headings.map((h, i) => (
                     <li key={`heading-${i}`}>{renderTextLike(h)}</li>
@@ -1426,19 +1895,12 @@ function WebsiteAnalysisCard({
             </div>
             <div className="space-y-2">
               {recs.map((r, i) => (
-                <div key={r.id ?? `wrec-${i}`} className="rounded-md border p-3">
+                <div key={`wrec-${i}`} className="rounded-md border p-3">
                   {r.title && <div className="text-sm font-medium">{renderTextLike(r.title)}</div>}
                   {r.reason && (
-                    <div className="mt-1 text-xs text-muted-foreground">{renderTextLike(r.reason)}</div>
-                  )}
-                  {r.evidence && (
-                    <div className="mt-1 text-xs"><span className="font-medium">Evidence:</span> {renderTextLike(r.evidence)}</div>
-                  )}
-                  {r.expectedImpact && (
-                    <div className="mt-1 text-xs"><span className="font-medium">Impact:</span> {renderTextLike(r.expectedImpact)}</div>
-                  )}
-                  {typeof r.confidence === "number" && (
-                    <div className="mt-1 text-xs text-muted-foreground">Confidence: {Math.round(r.confidence * 100)}%</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {renderTextLike(r.reason)}
+                    </div>
                   )}
                 </div>
               ))}
@@ -1449,4 +1911,3 @@ function WebsiteAnalysisCard({
     </Card>
   );
 }
-
