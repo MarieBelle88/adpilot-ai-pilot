@@ -210,6 +210,7 @@ function renderTextLike(v: unknown): string {
 function AdPilotDashboard() {
   // ---------- Config state ----------
   const [websiteUrl, setWebsiteUrl] = useState("https://www.pipedrive.com/");
+  const [websiteUrlError, setWebsiteUrlError] = useState<string | null>(null);
   const [marketingNotes, setMarketingNotes] = useState(
     "Pipedrive — B2B CRM software for growing sales teams. Campaign goal: drive qualified free-trial sign-ups from companies with 50–500 employees in North America. Prioritize high-intent CRM and sales-pipeline keywords (e.g. 'crm software', 'sales pipeline tool', 'best crm for small business', 'sales crm'). De-prioritize generic/informational queries and free-CRM seekers. Target CPA: $20.",
   );
