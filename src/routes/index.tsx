@@ -685,7 +685,38 @@ function AdPilotDashboard() {
                 <AlertTitle>Analysis generated from uploaded campaign data.</AlertTitle>
                 {analysisResult.executiveSummary && (
                   <AlertDescription className="mt-1 whitespace-pre-wrap text-sm">
-                    {analysisResult.executiveSummary}
+                    {typeof analysisResult.executiveSummary === "string" ? (
+                      <p>{analysisResult.executiveSummary}</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {analysisResult.executiveSummary.headline && (
+                          <p className="font-medium">
+                            {String(analysisResult.executiveSummary.headline)}
+                          </p>
+                        )}
+                        {Array.isArray(analysisResult.executiveSummary.findings) &&
+                          analysisResult.executiveSummary.findings.length > 0 && (
+                            <ul className="list-disc pl-5 space-y-0.5">
+                              {analysisResult.executiveSummary.findings.map((f, i) => (
+                                <li key={`finding-${i}`}>{String(f)}</li>
+                              ))}
+                            </ul>
+                          )}
+                        {Array.isArray(analysisResult.executiveSummary.limitations) &&
+                          analysisResult.executiveSummary.limitations.length > 0 && (
+                            <div>
+                              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Limitations
+                              </div>
+                              <ul className="list-disc pl-5 space-y-0.5">
+                                {analysisResult.executiveSummary.limitations.map((l, i) => (
+                                  <li key={`limitation-${i}`}>{String(l)}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                      </div>
+                    )}
                   </AlertDescription>
                 )}
               </Alert>
