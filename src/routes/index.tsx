@@ -627,105 +627,59 @@ function AdPilotDashboard() {
           </header>
 
           <div className="space-y-6 p-4 sm:p-6">
-            {lastRequest && (
+            {analyzing && (
               <Alert className="border-primary/40 bg-primary/5">
-                <Check className="h-4 w-4 text-primary" />
-                <AlertTitle>Analyze request sent · {lastRequest.at}</AlertTitle>
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <AlertTitle>Analyzing campaign data…</AlertTitle>
                 <AlertDescription>
-                  {lastRequest.datasetCount} enabled dataset{lastRequest.datasetCount === 1 ? "" : "s"} ·{" "}
-                  {lastRequest.totalRows.toLocaleString()} rows · goal{" "}
-                  <span className="font-medium">{lastRequest.objective}</span> ({lastRequest.primaryKpi}) ·
-                  action mode <span className="font-medium">{lastRequest.actionMode}</span>. Payload logged
-                  to the browser console.
+                  Your AI marketing employee is analyzing the uploaded campaign data.
+                  {lastAnalyzeStats && (
+                    <span className="ml-1">
+                      {lastAnalyzeStats.datasetCount} enabled dataset
+                      {lastAnalyzeStats.datasetCount === 1 ? "" : "s"} ·{" "}
+                      {lastAnalyzeStats.totalRows.toLocaleString()} rows.
+                    </span>
+                  )}
                 </AlertDescription>
               </Alert>
             )}
 
-            <Alert className="border-warning/40 bg-warning/10">
-              <Sparkles className="h-4 w-4 text-warning" />
-              <AlertTitle>Demo Results — real analysis is not connected yet.</AlertTitle>
-              <AlertDescription>
-                The metrics and recommendations below are fixed sample data. Uploaded CSVs are parsed and
-                logged but not yet scored.
-              </AlertDescription>
-            </Alert>
+            {!analyzing && analysisError && (
+              <Alert className="border-destructive/40 bg-destructive/10">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <AlertTitle>Analyze request failed</AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <div className="break-all text-xs">{analysisError}</div>
+                  <Button size="sm" variant="outline" onClick={handleAnalyze}>
+                    Retry
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
 
-            <Card className="border-primary/40">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                  <Activity className="h-4 w-4 text-primary" />
-                  Live Account Snapshot
-                  <Badge variant="outline" className="ml-2 text-[10px]">/api/snapshot</Badge>
-                </CardTitle>
-                <Button size="sm" variant="outline" onClick={loadSnapshot} disabled={snapshotLoading}>
-                  {snapshotLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Refresh"}
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {snapshotError && (
-                  <Alert className="border-destructive/40 bg-destructive/10">
-                    <AlertTriangle className="h-4 w-4 text-destructive" />
-                    <AlertTitle>Could not reach backend</AlertTitle>
-                    <AlertDescription className="break-all text-xs">{snapshotError}</AlertDescription>
-                  </Alert>
+            {!analyzing && !analysisError && analysisResult && (
+              <Alert className="border-success/40 bg-success/10">
+                <Check className="h-4 w-4 text-success" />
+                <AlertTitle>Analysis generated from uploaded campaign data.</AlertTitle>
+                {analysisResult.executiveSummary && (
+                  <AlertDescription className="mt-1 whitespace-pre-wrap text-sm">
+                    {analysisResult.executiveSummary}
+                  </AlertDescription>
                 )}
-                {liveMetrics && (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                    <Stat label="Campaigns" value={liveMetrics.campaigns.toString()} />
-                    <Stat label="Keywords" value={liveMetrics.keywords.toString()} />
-                    <Stat label="Clicks" value={liveMetrics.clicks.toLocaleString()} />
-                    <Stat label="Spend" value={`$${liveMetrics.spend.toFixed(2)}`} />
-                    <Stat label="Conversions" value={liveMetrics.conversions.toString()} />
-                    <Stat label="CPA" value={liveMetrics.cpa ? `$${liveMetrics.cpa.toFixed(2)}` : "—"} />
-                  </div>
-                )}
-                {snapshot && snapshot.campaigns?.length > 0 && (
-                  <div>
-                    <div className="mb-2 text-xs font-medium text-muted-foreground">Campaigns</div>
-                    <div className="space-y-1">
-                      {snapshot.campaigns.map((c) => (
-                        <div key={c.id} className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <Badge variant={c.status === "ENABLED" ? "default" : "secondary"} className="text-[10px]">{c.status}</Badge>
-                            <span className="font-medium">{c.name}</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground">Budget ${c.budget.toFixed(2)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {snapshot && snapshot.keywords?.length > 0 && (
-                  <div>
-                    <div className="mb-2 text-xs font-medium text-muted-foreground">Keywords</div>
-                    <div className="overflow-hidden rounded-md border">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/50 text-xs text-muted-foreground">
-                          <tr>
-                            <th className="px-3 py-2 text-left">Keyword</th>
-                            <th className="px-3 py-2 text-right">Clicks</th>
-                            <th className="px-3 py-2 text-right">Spend</th>
-                            <th className="px-3 py-2 text-right">Conv.</th>
-                            <th className="px-3 py-2 text-left">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {snapshot.keywords.map((k) => (
-                            <tr key={k.id} className="border-t">
-                              <td className="px-3 py-2">{k.text}</td>
-                              <td className="px-3 py-2 text-right">{k.clicks}</td>
-                              <td className="px-3 py-2 text-right">${k.spend.toFixed(2)}</td>
-                              <td className="px-3 py-2 text-right">{k.conversions}</td>
-                              <td className="px-3 py-2"><Badge variant={k.status === "ENABLED" ? "default" : "secondary"} className="text-[10px]">{k.status}</Badge></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              </Alert>
+            )}
+
+            {!analyzing && !analysisError && !analysisResult && (
+              <Alert className="border-warning/40 bg-warning/10">
+                <Sparkles className="h-4 w-4 text-warning" />
+                <AlertTitle>Demo Results — real analysis is not connected yet.</AlertTitle>
+                <AlertDescription>
+                  The metrics and recommendations below are fixed sample data. Click Analyze
+                  account to run a live analysis on the uploaded CSVs.
+                </AlertDescription>
+              </Alert>
+            )}
+
 
 
 
