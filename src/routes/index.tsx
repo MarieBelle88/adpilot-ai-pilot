@@ -81,34 +81,65 @@ export const Route = createFileRoute("/")({
 
 type ActionStatus = "pending" | "approved" | "rejected";
 
+type KeywordFilters = {
+  campaigns: string[];
+  keywords: string[];
+  devices: string[];
+  countries: string[];
+  minSpend: string;
+  minClicks: string;
+  minConversions: string;
+  dateRange: string;
+};
+type AdGroupFilters = {
+  months: string[];
+  adGroups: string[];
+  devices: string[];
+  minCost: string;
+  minRevenue: string;
+  negativeProfitOnly: boolean;
+};
+type MarketFilters = {
+  platforms: string[];
+  campaignTypes: string[];
+  countries: string[];
+  industries: string[];
+  minCpa: string;
+  minRoas: string;
+  dateRange: string;
+};
+type DatasetFilters = KeywordFilters | AdGroupFilters | MarketFilters | Record<string, never>;
+
 type Dataset = {
   id: string;
   name: string;
   filename: string;
-  rows: CampaignRow[];
-  headers: string[];
-  rawHeaders: string[];
-  type: DatasetType;
+  datasetType: DatasetType;
   enabled: boolean;
-  filters: {
-    campaigns: string[];
-    devices: string[];
-    countries: string[];
-    platforms: string[];
-    industries: string[];
-    adGroups: string[];
-  };
+  columns: string[];
+  rawHeaders: string[];
+  rowCount: number;
+  rows: CampaignRow[];
+  filters: DatasetFilters;
 };
 
-function makeDatasetFilters(rows: CampaignRow[]): Dataset["filters"] {
-  return {
-    campaigns: extractUnique(rows, "campaign"),
-    devices: extractUnique(rows, "device"),
-    countries: extractUnique(rows, "country"),
-    platforms: extractUnique(rows, "platform"),
-    industries: extractUnique(rows, "industry"),
-    adGroups: extractUnique(rows, "ad_group"),
-  };
+function makeFiltersFor(type: DatasetType): DatasetFilters {
+  if (type === "keyword")
+    return {
+      campaigns: [], keywords: [], devices: [], countries: [],
+      minSpend: "", minClicks: "", minConversions: "", dateRange: "Last 30 days",
+    };
+  if (type === "ad_group")
+    return {
+      months: [], adGroups: [], devices: [],
+      minCost: "", minRevenue: "", negativeProfitOnly: false,
+    };
+  if (type === "market")
+    return {
+      platforms: [], campaignTypes: [], countries: [], industries: [],
+      minCpa: "", minRoas: "", dateRange: "Last 30 days",
+    };
+  return {};
 }
 
 type RecTab = "summary" | "keywords" | "ad_groups" | "markets" | "risks";
