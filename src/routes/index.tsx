@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { fetchSnapshot, type Snapshot } from "@/lib/api";
 import {
   Activity,
   AlertTriangle,
@@ -278,6 +279,45 @@ function AdPilotDashboard() {
     primaryKpi: string;
     actionMode: string;
   } | null>(null);
+
+  // ---------- Live backend snapshot ----------
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(true);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+
+  async function loadSnapshot() {
+    setSnapshotLoading(true);
+    setSnapshotError(null);
+    try {
+      const data = await fetchSnapshot();
+      setSnapshot(data);
+    } catch (err) {
+      setSnapshotError(err instanceof Error ? err.message : "Failed to load snapshot");
+    } finally {
+      setSnapshotLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadSnapshot();
+  }, []);
+
+  const liveMetrics = useMemo(() => {
+    if (!snapshot) return null;
+    const kws = snapshot.keywords ?? [];
+    const clicks = kws.reduce((s, k) => s + (k.clicks || 0), 0);
+    const spend = kws.reduce((s, k) => s + (k.spend || 0), 0);
+    const conversions = kws.reduce((s, k) => s + (k.conversions || 0), 0);
+    const cpa = conversions > 0 ? spend / conversions : 0;
+    return {
+      campaigns: snapshot.campaigns?.length ?? 0,
+      keywords: kws.length,
+      clicks,
+      spend,
+      conversions,
+      cpa,
+    };
+  }, [snapshot]);
 
   const filtered = useMemo(
     () => recommendations.filter((r) => r.confidence >= minConfidence[0]),
@@ -583,6 +623,85 @@ function AdPilotDashboard() {
                 logged but not yet scored.
               </AlertDescription>
             </Alert>
+
+            <Card className="border-primary/40">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                  <Activity className="h-4 w-4 text-primary" />
+                  Live Account Snapshot
+                  <Badge variant="outline" className="ml-2 text-[10px]">/api/snapshot</Badge>
+                </CardTitle>
+                <Button size="sm" variant="outline" onClick={loadSnapshot} disabled={snapshotLoading}>
+                  {snapshotLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Refresh"}
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {snapshotError && (
+                  <Alert className="border-destructive/40 bg-destructive/10">
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                    <AlertTitle>Could not reach backend</AlertTitle>
+                    <AlertDescription className="break-all text-xs">{snapshotError}</AlertDescription>
+                  </Alert>
+                )}
+                {liveMetrics && (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                    <Stat label="Campaigns" value={liveMetrics.campaigns.toString()} />
+                    <Stat label="Keywords" value={liveMetrics.keywords.toString()} />
+                    <Stat label="Clicks" value={liveMetrics.clicks.toLocaleString()} />
+                    <Stat label="Spend" value={`$${liveMetrics.spend.toFixed(2)}`} />
+                    <Stat label="Conversions" value={liveMetrics.conversions.toString()} />
+                    <Stat label="CPA" value={liveMetrics.cpa ? `$${liveMetrics.cpa.toFixed(2)}` : "—"} />
+                  </div>
+                )}
+                {snapshot && snapshot.campaigns?.length > 0 && (
+                  <div>
+                    <div className="mb-2 text-xs font-medium text-muted-foreground">Campaigns</div>
+                    <div className="space-y-1">
+                      {snapshot.campaigns.map((c) => (
+                        <div key={c.id} className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={c.status === "ENABLED" ? "default" : "secondary"} className="text-[10px]">{c.status}</Badge>
+                            <span className="font-medium">{c.name}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">Budget ${c.budget.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {snapshot && snapshot.keywords?.length > 0 && (
+                  <div>
+                    <div className="mb-2 text-xs font-medium text-muted-foreground">Keywords</div>
+                    <div className="overflow-hidden rounded-md border">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50 text-xs text-muted-foreground">
+                          <tr>
+                            <th className="px-3 py-2 text-left">Keyword</th>
+                            <th className="px-3 py-2 text-right">Clicks</th>
+                            <th className="px-3 py-2 text-right">Spend</th>
+                            <th className="px-3 py-2 text-right">Conv.</th>
+                            <th className="px-3 py-2 text-left">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {snapshot.keywords.map((k) => (
+                            <tr key={k.id} className="border-t">
+                              <td className="px-3 py-2">{k.text}</td>
+                              <td className="px-3 py-2 text-right">{k.clicks}</td>
+                              <td className="px-3 py-2 text-right">${k.spend.toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right">{k.conversions}</td>
+                              <td className="px-3 py-2"><Badge variant={k.status === "ENABLED" ? "default" : "secondary"} className="text-[10px]">{k.status}</Badge></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+
 
             {!summary.trackingHealthy && (
               <Alert className="border-warning/40 bg-warning/10 text-foreground">
