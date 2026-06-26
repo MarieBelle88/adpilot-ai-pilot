@@ -405,7 +405,7 @@ function AdPilotDashboard() {
                         dataset={d}
                         onChange={(patch) => updateDataset(d.id, patch)}
                         onRemove={() => removeDataset(d.id)}
-                        onFilterChange={(k, v) => updateDatasetFilter(d.id, k, v)}
+                        onFiltersChange={(patch) => updateDatasetFilters(d.id, patch)}
                       />
                     ))}
                   </div>
