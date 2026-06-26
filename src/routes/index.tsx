@@ -1,6 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchSnapshot, type Snapshot } from "@/lib/api";
+import { useMemo, useRef, useState } from "react";
+import {
+  analyzeAccountApi,
+  type BackendRecommendation,
+  type BackendSummary,
+} from "@/lib/api";
 import {
   Activity,
   AlertTriangle,
@@ -159,12 +163,38 @@ function makeFiltersFor(type: DatasetType, rows?: CampaignRow[]): DatasetFilters
 
 type RecTab = "summary" | "keywords" | "ad_groups" | "markets" | "risks";
 
-function bucketRec(rec: Recommendation): RecTab {
-  if (rec.tab === "risks") return "risks";
-  if (rec.targetType === "keyword" || rec.targetType === "search_term") return "keywords";
-  if (rec.targetType === "ad") return "ad_groups";
+function bucketRec(rec: BackendRecommendation): RecTab {
+  const cat = (rec.category ?? "").toLowerCase();
+  if (cat.includes("risk")) return "risks";
+  const t = (rec.datasetType ?? "").toLowerCase();
+  if (t.includes("keyword") || t.includes("search_term")) return "keywords";
+  if (t.includes("ad_group") || t.includes("ad ") || t === "ad") return "ad_groups";
   return "markets";
 }
+
+function mockToBackendRec(r: Recommendation): BackendRecommendation {
+  const dt =
+    r.targetType === "keyword" || r.targetType === "search_term"
+      ? "keyword"
+      : r.targetType === "ad"
+        ? "ad_group"
+        : "market";
+  return {
+    id: r.id,
+    title: r.action,
+    datasetType: dt,
+    category: r.tab === "risks" ? "risk" : "opportunity",
+    target: r.target,
+    campaign: "",
+    reason: r.evidence,
+    ruleTriggered: r.rule,
+    expectedImpact: r.impact,
+    confidence: r.confidence,
+    evidence: r.evidence,
+    status: "pending",
+  };
+}
+
 
 function AdPilotDashboard() {
   // ---------- Config state ----------
@@ -265,63 +295,50 @@ function AdPilotDashboard() {
 
   // ---------- Results state ----------
   const [analyzing, setAnalyzing] = useState(false);
-  const [recommendations, setRecommendations] = useState<Recommendation[]>(mockRecommendations);
-  const [summary, setSummary] = useState(mockSummary);
   const [status, setStatus] = useState<Record<string, ActionStatus>>({});
   const [history, setHistory] = useState<
-    { id: string; action: string; outcome: ActionStatus; at: string }[]
+    { id: string; action: string; outcome: ActionStatus; at: string; simulated: boolean }[]
   >([]);
-  const [lastRequest, setLastRequest] = useState<{
-    at: string;
+
+  // ---------- Analysis result state ----------
+  const [analysisResult, setAnalysisResult] = useState<{
+    summary?: BackendSummary;
+    executiveSummary?: string;
+    recommendations: BackendRecommendation[];
+  } | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [lastAnalyzeStats, setLastAnalyzeStats] = useState<{
     datasetCount: number;
     totalRows: number;
-    objective: string;
-    primaryKpi: string;
-    actionMode: string;
   } | null>(null);
 
-  // ---------- Live backend snapshot ----------
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [snapshotLoading, setSnapshotLoading] = useState(true);
-  const [snapshotError, setSnapshotError] = useState<string | null>(null);
-
-  async function loadSnapshot() {
-    setSnapshotLoading(true);
-    setSnapshotError(null);
-    try {
-      const data = await fetchSnapshot();
-      setSnapshot(data);
-    } catch (err) {
-      setSnapshotError(err instanceof Error ? err.message : "Failed to load snapshot");
-    } finally {
-      setSnapshotLoading(false);
+  const displayRecs: BackendRecommendation[] = useMemo(() => {
+    if (analysisResult?.recommendations?.length) {
+      return analysisResult.recommendations.map((r, i) => ({
+        ...r,
+        id: r.id ?? `rec-${i}`,
+      }));
     }
-  }
+    return mockRecommendations.map(mockToBackendRec);
+  }, [analysisResult]);
 
-  useEffect(() => {
-    void loadSnapshot();
-  }, []);
-
-  const liveMetrics = useMemo(() => {
-    if (!snapshot) return null;
-    const kws = snapshot.keywords ?? [];
-    const clicks = kws.reduce((s, k) => s + (k.clicks || 0), 0);
-    const spend = kws.reduce((s, k) => s + (k.spend || 0), 0);
-    const conversions = kws.reduce((s, k) => s + (k.conversions || 0), 0);
-    const cpa = conversions > 0 ? spend / conversions : 0;
+  const summary = useMemo(() => {
+    const s = analysisResult?.summary;
+    if (!s) return mockSummary;
     return {
-      campaigns: snapshot.campaigns?.length ?? 0,
-      keywords: kws.length,
-      clicks,
-      spend,
-      conversions,
-      cpa,
+      ...mockSummary,
+      spend: s.spend ?? mockSummary.spend,
+      clicks: s.clicks ?? mockSummary.clicks,
+      conversions: s.conversions ?? mockSummary.conversions,
+      cpa: s.cpa ?? mockSummary.cpa,
+      roas: s.roas ?? mockSummary.roas,
+      wastedSpend: s.wastedSpend ?? mockSummary.wastedSpend,
     };
-  }, [snapshot]);
+  }, [analysisResult]);
 
   const filtered = useMemo(
-    () => recommendations.filter((r) => r.confidence >= minConfidence[0]),
-    [recommendations, minConfidence],
+    () => displayRecs.filter((r) => (r.confidence ?? 0) >= minConfidence[0]),
+    [displayRecs, minConfidence],
   );
 
   const goalProgress = useMemo(() => {
@@ -333,78 +350,87 @@ function AdPilotDashboard() {
     return Math.min(100, Math.round((summary.roas / Number(targetKpi || 1)) * 100));
   }, [primaryKpi, targetKpi, summary]);
 
-  function handleAnalyze() {
+  async function runAnalyze() {
     setAnalyzing(true);
-    try {
-      const payload = {
-        businessGoal: {
-          objective,
-          primaryKpi,
-          targetKpi: Number(targetKpi),
-          budgetPeriod,
-          budgetAmount: Number(budgetAmount),
-          targetCountry,
-          conversionType,
-          websiteUrl,
-          marketingNotes,
-        },
-        globalRules: {
-          dateRange,
-          matchType,
-          minImpressions: Number(minImpressions),
-          minClicks: Number(minClicks),
-          minSpend: Number(minSpend),
-          minConversions: Number(minConversions),
-          zeroConvOnly,
-          minConfidence: minConfidence[0],
-          zeroConvSpend: Number(zeroConvSpend),
-          highCpaPct: Number(highCpaPct),
-          maxBidChange: Number(maxBidChange),
-          maxBudgetChange: Number(maxBudgetChange),
-        },
-        actionMode,
-        // Each dataset is sent separately — never combined.
-        datasets: enabledDatasets.map((d) => ({
-          id: d.id,
-          filename: d.filename,
-          datasetType: d.datasetType,
-          enabled: d.enabled,
-          columns: d.columns,
-          rowCount: d.rowCount,
-          rows: d.rows,
-          filters: d.filters,
-        })),
-      };
-      // Backend not connected yet. Log payload for inspection.
-      // eslint-disable-next-line no-console
-      console.log("[AdPilot] Analyze payload", payload);
-      const totalRows = payload.datasets.reduce((s, d) => s + d.rowCount, 0);
-      setLastRequest({
-        at: new Date().toLocaleString(),
-        datasetCount: payload.datasets.length,
-        totalRows,
+    setAnalysisError(null);
+    const payload = {
+      businessGoal: {
         objective,
         primaryKpi,
-        actionMode,
+        targetKpi: Number(targetKpi),
+        budgetPeriod,
+        budgetAmount: Number(budgetAmount),
+        targetCountry,
+        conversionType,
+        websiteUrl,
+        marketingNotes,
+      },
+      globalRules: {
+        dateRange,
+        matchType,
+        minImpressions: Number(minImpressions),
+        minClicks: Number(minClicks),
+        minSpend: Number(minSpend),
+        minConversions: Number(minConversions),
+        zeroConvOnly,
+        minConfidence: minConfidence[0],
+        zeroConvSpend: Number(zeroConvSpend),
+        highCpaPct: Number(highCpaPct),
+        maxBidChange: Number(maxBidChange),
+        maxBudgetChange: Number(maxBudgetChange),
+      },
+      actionMode,
+      datasets: enabledDatasets.map((d) => ({
+        filename: d.filename,
+        datasetType: d.datasetType,
+        enabled: d.enabled,
+        filters: d.filters,
+        rows: d.rows,
+      })),
+    };
+    const totalRows = payload.datasets.reduce((s, d) => s + d.rows.length, 0);
+    setLastAnalyzeStats({ datasetCount: payload.datasets.length, totalRows });
+    // eslint-disable-next-line no-console
+    console.log("[AdPilot] Analyze payload", payload);
+    try {
+      const res = await analyzeAccountApi(payload);
+      setAnalysisResult({
+        summary: res.summary,
+        executiveSummary: res.executiveSummary,
+        recommendations: res.recommendations ?? [],
       });
-      toast.success("Payload logged to console", {
-        description: `${payload.datasets.length} dataset${payload.datasets.length === 1 ? "" : "s"} · ${totalRows.toLocaleString()} rows`,
+      setStatus({});
+      toast.success("Analysis complete", {
+        description: `${res.recommendations?.length ?? 0} recommendation(s)`,
       });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Analyze request failed";
+      setAnalysisError(msg);
+      toast.error("Analyze failed", { description: msg });
     } finally {
       setAnalyzing(false);
     }
   }
 
+  function handleAnalyze() {
+    void runAnalyze();
+  }
+
   function decide(id: string, outcome: ActionStatus) {
     setStatus((s) => ({ ...s, [id]: outcome }));
-    const rec = recommendations.find((r) => r.id === id);
+    const rec = displayRecs.find((r) => r.id === id);
     if (rec) {
-      setHistory((h) => [{ id, action: rec.action, outcome, at: new Date().toLocaleString() }, ...h]);
-      toast(outcome === "approved" ? "Approved" : outcome === "rejected" ? "Rejected" : "Edited", {
-        description: rec.action,
+      const label = rec.title ?? rec.target ?? id;
+      setHistory((h) => [
+        { id, action: label, outcome, at: new Date().toLocaleString(), simulated: true },
+        ...h,
+      ]);
+      toast(outcome === "approved" ? "Approved (simulated)" : outcome === "rejected" ? "Rejected" : "Edited", {
+        description: label,
       });
     }
   }
+
 
   const sourceLabel =
     enabledDatasets.length > 0
@@ -601,105 +627,59 @@ function AdPilotDashboard() {
           </header>
 
           <div className="space-y-6 p-4 sm:p-6">
-            {lastRequest && (
+            {analyzing && (
               <Alert className="border-primary/40 bg-primary/5">
-                <Check className="h-4 w-4 text-primary" />
-                <AlertTitle>Analyze request sent · {lastRequest.at}</AlertTitle>
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <AlertTitle>Analyzing campaign data…</AlertTitle>
                 <AlertDescription>
-                  {lastRequest.datasetCount} enabled dataset{lastRequest.datasetCount === 1 ? "" : "s"} ·{" "}
-                  {lastRequest.totalRows.toLocaleString()} rows · goal{" "}
-                  <span className="font-medium">{lastRequest.objective}</span> ({lastRequest.primaryKpi}) ·
-                  action mode <span className="font-medium">{lastRequest.actionMode}</span>. Payload logged
-                  to the browser console.
+                  Your AI marketing employee is analyzing the uploaded campaign data.
+                  {lastAnalyzeStats && (
+                    <span className="ml-1">
+                      {lastAnalyzeStats.datasetCount} enabled dataset
+                      {lastAnalyzeStats.datasetCount === 1 ? "" : "s"} ·{" "}
+                      {lastAnalyzeStats.totalRows.toLocaleString()} rows.
+                    </span>
+                  )}
                 </AlertDescription>
               </Alert>
             )}
 
-            <Alert className="border-warning/40 bg-warning/10">
-              <Sparkles className="h-4 w-4 text-warning" />
-              <AlertTitle>Demo Results — real analysis is not connected yet.</AlertTitle>
-              <AlertDescription>
-                The metrics and recommendations below are fixed sample data. Uploaded CSVs are parsed and
-                logged but not yet scored.
-              </AlertDescription>
-            </Alert>
+            {!analyzing && analysisError && (
+              <Alert className="border-destructive/40 bg-destructive/10">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <AlertTitle>Analyze request failed</AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <div className="break-all text-xs">{analysisError}</div>
+                  <Button size="sm" variant="outline" onClick={handleAnalyze}>
+                    Retry
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
 
-            <Card className="border-primary/40">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                  <Activity className="h-4 w-4 text-primary" />
-                  Live Account Snapshot
-                  <Badge variant="outline" className="ml-2 text-[10px]">/api/snapshot</Badge>
-                </CardTitle>
-                <Button size="sm" variant="outline" onClick={loadSnapshot} disabled={snapshotLoading}>
-                  {snapshotLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Refresh"}
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {snapshotError && (
-                  <Alert className="border-destructive/40 bg-destructive/10">
-                    <AlertTriangle className="h-4 w-4 text-destructive" />
-                    <AlertTitle>Could not reach backend</AlertTitle>
-                    <AlertDescription className="break-all text-xs">{snapshotError}</AlertDescription>
-                  </Alert>
+            {!analyzing && !analysisError && analysisResult && (
+              <Alert className="border-success/40 bg-success/10">
+                <Check className="h-4 w-4 text-success" />
+                <AlertTitle>Analysis generated from uploaded campaign data.</AlertTitle>
+                {analysisResult.executiveSummary && (
+                  <AlertDescription className="mt-1 whitespace-pre-wrap text-sm">
+                    {analysisResult.executiveSummary}
+                  </AlertDescription>
                 )}
-                {liveMetrics && (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                    <Stat label="Campaigns" value={liveMetrics.campaigns.toString()} />
-                    <Stat label="Keywords" value={liveMetrics.keywords.toString()} />
-                    <Stat label="Clicks" value={liveMetrics.clicks.toLocaleString()} />
-                    <Stat label="Spend" value={`$${liveMetrics.spend.toFixed(2)}`} />
-                    <Stat label="Conversions" value={liveMetrics.conversions.toString()} />
-                    <Stat label="CPA" value={liveMetrics.cpa ? `$${liveMetrics.cpa.toFixed(2)}` : "—"} />
-                  </div>
-                )}
-                {snapshot && snapshot.campaigns?.length > 0 && (
-                  <div>
-                    <div className="mb-2 text-xs font-medium text-muted-foreground">Campaigns</div>
-                    <div className="space-y-1">
-                      {snapshot.campaigns.map((c) => (
-                        <div key={c.id} className="flex items-center justify-between rounded-md border bg-card px-3 py-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <Badge variant={c.status === "ENABLED" ? "default" : "secondary"} className="text-[10px]">{c.status}</Badge>
-                            <span className="font-medium">{c.name}</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground">Budget ${c.budget.toFixed(2)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {snapshot && snapshot.keywords?.length > 0 && (
-                  <div>
-                    <div className="mb-2 text-xs font-medium text-muted-foreground">Keywords</div>
-                    <div className="overflow-hidden rounded-md border">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/50 text-xs text-muted-foreground">
-                          <tr>
-                            <th className="px-3 py-2 text-left">Keyword</th>
-                            <th className="px-3 py-2 text-right">Clicks</th>
-                            <th className="px-3 py-2 text-right">Spend</th>
-                            <th className="px-3 py-2 text-right">Conv.</th>
-                            <th className="px-3 py-2 text-left">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {snapshot.keywords.map((k) => (
-                            <tr key={k.id} className="border-t">
-                              <td className="px-3 py-2">{k.text}</td>
-                              <td className="px-3 py-2 text-right">{k.clicks}</td>
-                              <td className="px-3 py-2 text-right">${k.spend.toFixed(2)}</td>
-                              <td className="px-3 py-2 text-right">{k.conversions}</td>
-                              <td className="px-3 py-2"><Badge variant={k.status === "ENABLED" ? "default" : "secondary"} className="text-[10px]">{k.status}</Badge></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+              </Alert>
+            )}
+
+            {!analyzing && !analysisError && !analysisResult && (
+              <Alert className="border-warning/40 bg-warning/10">
+                <Sparkles className="h-4 w-4 text-warning" />
+                <AlertTitle>Demo Results — real analysis is not connected yet.</AlertTitle>
+                <AlertDescription>
+                  The metrics and recommendations below are fixed sample data. Click Analyze
+                  account to run a live analysis on the uploaded CSVs.
+                </AlertDescription>
+              </Alert>
+            )}
+
 
 
 
@@ -725,7 +705,7 @@ function AdPilotDashboard() {
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Filtered results</CardTitle></CardHeader>
                 <CardContent>
                   <div className="text-3xl font-semibold">{filtered.length}</div>
-                  <p className="mt-1 text-xs text-muted-foreground">of {recommendations.length} total · ≥ {Math.round(minConfidence[0] * 100)}% confidence</p>
+                  <p className="mt-1 text-xs text-muted-foreground">of {displayRecs.length} total · ≥ {Math.round(minConfidence[0] * 100)}% confidence</p>
                 </CardContent>
               </Card>
               <Card>
@@ -764,12 +744,13 @@ function AdPilotDashboard() {
                     {filtered.slice(0, 4).map((r) => (
                       <div key={r.id} className="flex items-start justify-between gap-3 border-b pb-3 last:border-0 last:pb-0">
                         <div className="min-w-0">
-                          <div className="text-sm font-medium">{r.action}</div>
-                          <div className="truncate text-xs text-muted-foreground">{r.target}</div>
+                          <div className="text-sm font-medium">{r.title ?? "Recommendation"}</div>
+                          <div className="truncate text-xs text-muted-foreground">{r.target ?? r.campaign ?? ""}</div>
                         </div>
-                        <Badge variant="outline" className="shrink-0">{Math.round(r.confidence * 100)}%</Badge>
+                        <Badge variant="outline" className="shrink-0">{Math.round((r.confidence ?? 0) * 100)}%</Badge>
                       </div>
                     ))}
+
                     {filtered.length === 0 && <EmptyState />}
                   </CardContent>
                 </Card>
@@ -783,7 +764,7 @@ function AdPilotDashboard() {
                       <EmptyState />
                     ) : (
                       recs.map((r) => (
-                        <RecCard key={r.id} rec={r} status={status[r.id]} onDecide={decide} />
+                        <RecCard key={r.id ?? ""} rec={r} status={status[r.id ?? ""]} onDecide={decide} />
                       ))
                     )}
                   </TabsContent>
@@ -800,13 +781,17 @@ function AdPilotDashboard() {
                         <div key={i} className="flex items-center justify-between gap-3 px-4 py-3">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-medium">{h.action}</div>
-                            <div className="text-xs text-muted-foreground">{h.at}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {h.at}
+                              {h.outcome === "approved" && h.simulated && " · simulated execution"}
+                            </div>
                           </div>
                           <Badge variant={h.outcome === "approved" ? "default" : "secondary"} className={cn(h.outcome === "approved" && "bg-success text-success-foreground")}>
-                            {h.outcome}
+                            {h.outcome === "approved" ? "approved (simulated)" : h.outcome}
                           </Badge>
                         </div>
                       ))}
+
                     </CardContent>
                   </Card>
                 )}
@@ -1127,54 +1112,81 @@ function EmptyState() {
 
 function RecCard({
   rec, status, onDecide,
-}: { rec: Recommendation; status?: ActionStatus; onDecide: (id: string, s: ActionStatus) => void }) {
+}: { rec: BackendRecommendation; status?: ActionStatus; onDecide: (id: string, s: ActionStatus) => void }) {
+  const id = rec.id ?? "";
   return (
     <Card className={cn("transition", status === "approved" && "border-success/50", status === "rejected" && "opacity-60")}>
       <CardContent className="p-4 sm:p-5">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
             <div className="mb-1 flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="capitalize">{rec.targetType.replace("_", " ")}</Badge>
-              <Badge variant="outline" className="border-primary/40 text-primary">{rec.rule}</Badge>
+              {rec.datasetType && (
+                <Badge variant="secondary" className="capitalize">{rec.datasetType.replace(/_/g, " ")}</Badge>
+              )}
+              {rec.category && (
+                <Badge variant="outline" className="capitalize">{rec.category}</Badge>
+              )}
+              {rec.ruleTriggered && (
+                <Badge variant="outline" className="border-primary/40 text-primary">{rec.ruleTriggered}</Badge>
+              )}
+              {rec.status && (
+                <Badge variant="outline" className="capitalize">{rec.status}</Badge>
+              )}
               {status && (
                 <Badge className={cn(
                   status === "approved" && "bg-success text-success-foreground",
                   status === "rejected" && "bg-destructive text-destructive-foreground",
-                )}>{status}</Badge>
+                )}>
+                  {status === "approved" ? "Approved (simulated)" : status}
+                </Badge>
               )}
             </div>
-            <div className="text-base font-semibold leading-snug sm:text-lg">{rec.action}</div>
-            <div className="mt-1 truncate text-xs text-muted-foreground">{rec.target}</div>
+            <div className="text-base font-semibold leading-snug sm:text-lg">{rec.title ?? "Recommendation"}</div>
+            <div className="mt-1 grid gap-0.5 text-xs text-muted-foreground">
+              {rec.target && <div className="truncate"><span className="font-medium text-foreground/70">Target:</span> {rec.target}</div>}
+              {rec.campaign && <div className="truncate"><span className="font-medium text-foreground/70">Campaign:</span> {rec.campaign}</div>}
+            </div>
           </div>
-          <ConfidenceBadge value={rec.confidence} />
+          <ConfidenceBadge value={rec.confidence ?? 0} />
         </div>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Evidence</div>
-            <p className="mt-1 text-sm">{rec.evidence}</p>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Expected impact</div>
-            <p className="mt-1 text-sm font-medium text-success">{rec.impact}</p>
-          </div>
+          {(rec.reason || rec.evidence) && (
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Reason / evidence</div>
+              {rec.reason && <p className="mt-1 text-sm">{rec.reason}</p>}
+              {rec.evidence && rec.evidence !== rec.reason && (
+                <p className="mt-1 text-xs text-muted-foreground">{rec.evidence}</p>
+              )}
+            </div>
+          )}
+          {rec.expectedImpact && (
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Expected impact</div>
+              <p className="mt-1 text-sm font-medium text-success">{rec.expectedImpact}</p>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => onDecide(rec.id, "approved")} disabled={status === "approved"}>
+          <Button size="sm" onClick={() => onDecide(id, "approved")} disabled={status === "approved"}>
             <Check className="mr-1 h-4 w-4" /> Approve
           </Button>
-          <Button size="sm" variant="outline" onClick={() => onDecide(rec.id, "rejected")} disabled={status === "rejected"}>
+          <Button size="sm" variant="outline" onClick={() => onDecide(id, "rejected")} disabled={status === "rejected"}>
             <X className="mr-1 h-4 w-4" /> Reject
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => onDecide(rec.id, "pending")}>
+          <Button size="sm" variant="ghost" onClick={() => onDecide(id, "pending")}>
             <PencilLine className="mr-1 h-4 w-4" /> Edit
           </Button>
+          {status === "approved" && (
+            <Badge variant="outline" className="ml-auto text-[10px]">Simulated execution</Badge>
+          )}
         </div>
       </CardContent>
     </Card>
   );
 }
+
 
 function ConfidenceBadge({ value }: { value: number }) {
   const pct = Math.round(value * 100);
