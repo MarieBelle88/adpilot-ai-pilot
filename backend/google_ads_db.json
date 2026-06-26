@@ -1,0 +1,28 @@
+{
+  "campaigns": [
+    {
+      "id": "camp_01",
+      "name": "Berlin Plumbing Search",
+      "status": "ENABLED",
+      "budget": 50.00
+    }
+  ],
+  "keywords": [
+    {
+      "id": "kw_101",
+      "text": "emergency plumber berlin",
+      "clicks": 45,
+      "spend": 90.00,
+      "conversions": 6,
+      "status": "ENABLED"
+    },
+    {
+      "id": "kw_102",
+      "text": "cheap plumbers",
+      "clicks": 110,
+      "spend": 62.00,
+      "conversions": 0,
+      "status": "ENABLED"
+    }
+  ]
+}
