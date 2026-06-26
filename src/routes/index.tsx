@@ -245,7 +245,7 @@ function AdPilotDashboard() {
         if (d.id !== id) return d;
         const merged = { ...d, ...patch };
         if (patch.datasetType && patch.datasetType !== d.datasetType) {
-          merged.filters = makeFiltersFor(patch.datasetType);
+          merged.filters = makeFiltersFor(patch.datasetType, d.rows);
         }
         return merged;
       }),
