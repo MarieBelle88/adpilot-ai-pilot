@@ -15,6 +15,18 @@ Enter any website URL → get a full audit in seconds.
 
 ---
 
+## 🔗 Live Demo
+
+| Service | URL |
+|---|---|
+| **Frontend (Live App)** | **[https://8080-q0xeuxdwi7zsuaqi.daytonaproxy01.eu](https://8080-q0xeuxdwi7zsuaqi.daytonaproxy01.eu)** |
+| **Backend API** | [https://8000-9rxtc15yt1vtbbey.daytonaproxy01.eu](https://8000-9rxtc15yt1vtbbey.daytonaproxy01.eu) |
+| **GitHub Repo** | [https://github.com/abdalla980/googleAdsAgent](https://github.com/abdalla980/googleAdsAgent) |
+
+> Hosted on **Daytona** cloud sandbox — no setup required. Just open the frontend URL and enter any website URL to run a live audit.
+
+---
+
 ## 💸 The Money Problem We Solve
 
 > The average Google Ads account **wastes 26% of its budget** on zero-conversion keywords.
