@@ -325,6 +325,8 @@ function AdPilotDashboard() {
           limitations?: unknown[];
         };
     recommendations: BackendRecommendation[];
+    websiteContext?: WebsiteContext;
+    websiteRecommendations?: WebsiteRecommendation[];
   } | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [lastAnalyzeStats, setLastAnalyzeStats] = useState<{
