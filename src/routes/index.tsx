@@ -1,6 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchSnapshot, type Snapshot } from "@/lib/api";
+import {
+  analyzeAccountApi,
+  type BackendRecommendation,
+  type BackendSummary,
+} from "@/lib/api";
 import {
   Activity,
   AlertTriangle,
