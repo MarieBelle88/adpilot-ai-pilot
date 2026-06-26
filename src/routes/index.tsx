@@ -888,7 +888,9 @@ function DatasetPreview({ dataset }: { dataset: Dataset }) {
               <tr key={i} className="border-t border-sidebar-border">
                 {dataset.columns.map((c) => (
                   <td key={c} className="whitespace-nowrap px-2 py-1 text-sidebar-foreground/80">
-                    {String(row[c] ?? "")}
+                    {row[c] === null || row[c] === undefined || row[c] === ""
+                      ? <span className="text-sidebar-foreground/30">—</span>
+                      : String(row[c])}
                   </td>
                 ))}
               </tr>
@@ -896,6 +898,37 @@ function DatasetPreview({ dataset }: { dataset: Dataset }) {
           </tbody>
         </table>
       </div>
+      <div className="mt-2 grid grid-cols-3 gap-2 text-[10px]">
+        <StatBox label="Usable rows" value={dataset.stats.usableRows.toLocaleString()} />
+        <StatBox label="Problematic rows" value={dataset.stats.problematicRows.toLocaleString()} />
+        <StatBox label="Invalid dates" value={dataset.stats.invalidDates.toLocaleString()} />
+      </div>
+      <div className="mt-2">
+        <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">Missing values by column</div>
+        <div className="flex flex-wrap gap-1">
+          {dataset.columns.map((c) => {
+            const n = dataset.stats.missingByColumn[c] ?? 0;
+            if (n === 0) return null;
+            return (
+              <Badge key={c} variant="outline" className="text-[10px]">
+                {c}: {n}
+              </Badge>
+            );
+          })}
+          {dataset.columns.every((c) => (dataset.stats.missingByColumn[c] ?? 0) === 0) && (
+            <span className="text-[10px] text-sidebar-foreground/50">None</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-sidebar-border bg-sidebar px-2 py-1">
+      <div className="text-[9px] uppercase tracking-wide text-sidebar-foreground/50">{label}</div>
+      <div className="text-xs font-medium text-sidebar-foreground/90">{value}</div>
     </div>
   );
 }
