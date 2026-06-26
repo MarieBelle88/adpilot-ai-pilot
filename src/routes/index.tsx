@@ -109,6 +109,47 @@ function AdPilotDashboard() {
 
   const [actionMode, setActionMode] = useState<"insights" | "approval" | "automatic">("approval");
 
+  // ---------- CSV upload state ----------
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadedRows, setUploadedRows] = useState<CampaignRow[]>([]);
+  const [uploadedFilename, setUploadedFilename] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const csvCampaigns = useMemo(
+    () => (uploadedRows.length ? extractUnique(uploadedRows, "campaign") : mockCampaigns),
+    [uploadedRows],
+  );
+  const csvDevices = useMemo(
+    () => (uploadedRows.length ? extractUnique(uploadedRows, "device") : ["Desktop", "Mobile", "Tablet"]),
+    [uploadedRows],
+  );
+  const csvCountries = useMemo(
+    () => (uploadedRows.length ? extractUnique(uploadedRows, "country") : mockCountries),
+    [uploadedRows],
+  );
+
+  async function handleCsvFile(file: File) {
+    setUploadError(null);
+    try {
+      const text = await file.text();
+      const rows = parseCampaignCsv(text);
+      if (!rows.length) throw new Error("No data rows found.");
+      setUploadedRows(rows);
+      setUploadedFilename(file.name);
+      setDataSource("upload");
+      setCampaigns(extractUnique(rows, "campaign"));
+      const devs = extractUnique(rows, "device");
+      if (devs.length) setDevices(devs);
+      const countries = extractUnique(rows, "country");
+      if (countries.length && !countries.includes(country)) setCountry(countries[0]);
+      toast.success("CSV loaded", { description: `${file.name} · ${rows.length} rows` });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to parse CSV";
+      setUploadError(msg);
+      toast.error("CSV upload failed", { description: msg });
+    }
+  }
+
   // ---------- Results state ----------
   const [analyzing, setAnalyzing] = useState(false);
   const [recommendations, setRecommendations] = useState<Recommendation[]>(mockRecommendations);
