@@ -1,0 +1,27 @@
+{
+  "name": "AdPilot AI",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+  "forwardPorts": [3000, 8000],
+  "portsAttributes": {
+    "3000": { "label": "Frontend (Vite)", "onAutoForward": "openPreview" },
+    "8000": { "label": "Backend (FastAPI)", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "pip install -r backend/requirements.txt && npm install -g bun && cd adpilot-ai-pilot && bun install",
+  "remoteEnv": {
+    "VITE_BACKEND_URL": "http://localhost:8000"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "bradlc.vscode-tailwindcss",
+        "dbaeumer.vscode-eslint"
+      ]
+    }
+  }
+}

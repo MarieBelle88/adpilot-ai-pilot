@@ -1,0 +1,297 @@
+{
+  "account": {
+    "name": "Berlin Plumbing GmbH",
+    "currency": "EUR",
+    "dateRange": "Last 30 days",
+    "totalSpend": 4820.50,
+    "totalConversions": 38,
+    "totalImpressions": 284530,
+    "totalClicks": 9210
+  },
+  "campaigns": [
+    {
+      "id": "camp_01",
+      "name": "Emergency Plumber Berlin",
+      "status": "ENABLED",
+      "dailyBudget": 80.00,
+      "spend": 2240.00,
+      "impressions": 142000,
+      "clicks": 4800,
+      "conversions": 28,
+      "cpa": 80.00,
+      "roas": 3.20,
+      "type": "SEARCH"
+    },
+    {
+      "id": "camp_02",
+      "name": "Generic Plumbing Services",
+      "status": "ENABLED",
+      "dailyBudget": 50.00,
+      "spend": 1480.00,
+      "impressions": 98000,
+      "clicks": 3600,
+      "conversions": 7,
+      "cpa": 211.43,
+      "roas": 1.20,
+      "type": "SEARCH"
+    },
+    {
+      "id": "camp_03",
+      "name": "Display Retargeting",
+      "status": "ENABLED",
+      "dailyBudget": 30.00,
+      "spend": 890.00,
+      "impressions": 41000,
+      "clicks": 710,
+      "conversions": 2,
+      "cpa": 445.00,
+      "roas": 0.60,
+      "type": "DISPLAY"
+    },
+    {
+      "id": "camp_04",
+      "name": "Drain Unblocking Special",
+      "status": "ENABLED",
+      "dailyBudget": 20.00,
+      "spend": 210.50,
+      "impressions": 3530,
+      "clicks": 100,
+      "conversions": 1,
+      "cpa": 210.50,
+      "roas": 1.10,
+      "type": "SEARCH"
+    }
+  ],
+  "keywords": [
+    {
+      "id": "kw_101",
+      "campaignId": "camp_01",
+      "adGroupId": "ag_01",
+      "text": "emergency plumber berlin",
+      "matchType": "EXACT",
+      "clicks": 1800,
+      "impressions": 52000,
+      "spend": 720.00,
+      "conversions": 18,
+      "cpa": 40.00,
+      "avgCpc": 0.40,
+      "qualityScore": 9,
+      "status": "ENABLED",
+      "bidAmount": 0.85
+    },
+    {
+      "id": "kw_102",
+      "campaignId": "camp_02",
+      "adGroupId": "ag_03",
+      "text": "cheap plumbers",
+      "matchType": "BROAD",
+      "clicks": 1100,
+      "impressions": 38000,
+      "spend": 620.00,
+      "conversions": 0,
+      "cpa": null,
+      "avgCpc": 0.56,
+      "qualityScore": 4,
+      "status": "ENABLED",
+      "bidAmount": 0.60
+    },
+    {
+      "id": "kw_103",
+      "campaignId": "camp_01",
+      "adGroupId": "ag_01",
+      "text": "plumber near me 24h",
+      "matchType": "PHRASE",
+      "clicks": 950,
+      "impressions": 28000,
+      "spend": 380.00,
+      "conversions": 7,
+      "cpa": 54.28,
+      "avgCpc": 0.40,
+      "qualityScore": 8,
+      "status": "ENABLED",
+      "bidAmount": 0.75
+    },
+    {
+      "id": "kw_104",
+      "campaignId": "camp_02",
+      "adGroupId": "ag_03",
+      "text": "plumbing services",
+      "matchType": "BROAD",
+      "clicks": 1400,
+      "impressions": 41000,
+      "spend": 560.00,
+      "conversions": 3,
+      "cpa": 186.67,
+      "avgCpc": 0.40,
+      "qualityScore": 5,
+      "status": "ENABLED",
+      "bidAmount": 0.50
+    },
+    {
+      "id": "kw_105",
+      "campaignId": "camp_01",
+      "adGroupId": "ag_02",
+      "text": "burst pipe repair berlin",
+      "matchType": "EXACT",
+      "clicks": 220,
+      "impressions": 8400,
+      "spend": 198.00,
+      "conversions": 4,
+      "cpa": 49.50,
+      "avgCpc": 0.90,
+      "qualityScore": 9,
+      "status": "ENABLED",
+      "bidAmount": 1.10
+    },
+    {
+      "id": "kw_106",
+      "campaignId": "camp_04",
+      "adGroupId": "ag_05",
+      "text": "drain unblocking",
+      "matchType": "PHRASE",
+      "clicks": 100,
+      "impressions": 3530,
+      "spend": 210.50,
+      "conversions": 1,
+      "cpa": 210.50,
+      "avgCpc": 2.11,
+      "qualityScore": 6,
+      "status": "ENABLED",
+      "bidAmount": 2.00
+    },
+    {
+      "id": "kw_107",
+      "campaignId": "camp_02",
+      "adGroupId": "ag_04",
+      "text": "plumber jobs berlin",
+      "matchType": "BROAD",
+      "clicks": 640,
+      "impressions": 12000,
+      "spend": 256.00,
+      "conversions": 0,
+      "cpa": null,
+      "avgCpc": 0.40,
+      "qualityScore": 3,
+      "status": "ENABLED",
+      "bidAmount": 0.45
+    },
+    {
+      "id": "kw_108",
+      "campaignId": "camp_01",
+      "adGroupId": "ag_02",
+      "text": "water leak repair",
+      "matchType": "PHRASE",
+      "clicks": 480,
+      "impressions": 17200,
+      "spend": 192.00,
+      "conversions": 6,
+      "cpa": 32.00,
+      "avgCpc": 0.40,
+      "qualityScore": 8,
+      "status": "ENABLED",
+      "bidAmount": 0.65
+    }
+  ],
+  "searchTerms": [
+    {
+      "term": "plumber jobs near me",
+      "campaignId": "camp_02",
+      "clicks": 290,
+      "impressions": 5800,
+      "spend": 116.00,
+      "conversions": 0,
+      "matchedKeyword": "kw_107"
+    },
+    {
+      "term": "plumbing apprenticeship berlin",
+      "campaignId": "camp_02",
+      "clicks": 180,
+      "impressions": 3200,
+      "spend": 72.00,
+      "conversions": 0,
+      "matchedKeyword": "kw_107"
+    },
+    {
+      "term": "free plumber quote",
+      "campaignId": "camp_02",
+      "clicks": 320,
+      "impressions": 7400,
+      "spend": 128.00,
+      "conversions": 0,
+      "matchedKeyword": "kw_102"
+    },
+    {
+      "term": "24 hour emergency plumber berlin",
+      "campaignId": "camp_01",
+      "clicks": 410,
+      "impressions": 9800,
+      "spend": 164.00,
+      "conversions": 8,
+      "matchedKeyword": "kw_101"
+    }
+  ],
+  "ads": [
+    {
+      "id": "ad_01",
+      "campaignId": "camp_01",
+      "adGroupId": "ag_01",
+      "type": "RSA",
+      "headlines": [
+        "Emergency Plumber Berlin",
+        "24/7 Response Guaranteed",
+        "Fixed Price — No Surprises"
+      ],
+      "descriptions": [
+        "Burst pipe? Blocked drain? We're there in 60 min. Call now.",
+        "Certified plumbers, transparent pricing. Book online today."
+      ],
+      "clicks": 1200,
+      "impressions": 38000,
+      "ctr": 3.16,
+      "conversions": 14,
+      "status": "ENABLED"
+    },
+    {
+      "id": "ad_02",
+      "campaignId": "camp_02",
+      "adGroupId": "ag_03",
+      "type": "RSA",
+      "headlines": [
+        "Plumbing Services Berlin",
+        "Affordable & Reliable",
+        "Get a Free Quote"
+      ],
+      "descriptions": [
+        "Full plumbing services at competitive prices. Same-day available.",
+        "No call-out fee. Friendly, professional plumbers."
+      ],
+      "clicks": 890,
+      "impressions": 29000,
+      "ctr": 3.07,
+      "conversions": 3,
+      "status": "ENABLED"
+    }
+  ],
+  "landingPages": [
+    {
+      "url": "https://berlin-plumbing.example.com/",
+      "bounceRate": 68,
+      "avgSessionDuration": 42,
+      "mobileConvRate": 0.9,
+      "desktopConvRate": 3.2,
+      "mobileLCP": 5.1,
+      "desktopLCP": 2.3,
+      "cjAssignedCampaigns": ["camp_01", "camp_02"]
+    },
+    {
+      "url": "https://berlin-plumbing.example.com/emergency",
+      "bounceRate": 38,
+      "avgSessionDuration": 110,
+      "mobileConvRate": 3.8,
+      "desktopConvRate": 4.1,
+      "mobileLCP": 2.1,
+      "desktopLCP": 1.9,
+      "cjAssignedCampaigns": []
+    }
+  ]
+}
