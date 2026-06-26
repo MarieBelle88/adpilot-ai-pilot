@@ -1,0 +1,7 @@
+├── backend/
+│   ├── main.py             # FastAPI Server (The Bridge to Lovable)
+│   ├── agent.py            # The AI Logic & Prompt Templates
+│   ├── scraper.py          # Website text grabber
+│   └── sandbox_data/
+│       ├── target_goals.json   # What the user inputs in Lovable (CPA, budget)
+│       └── google_ads_db.json  # Your "Sandbox" Google Ads data
