@@ -61,6 +61,15 @@ import { cn } from "@/lib/utils";
 import { parseCampaignCsv, extractUnique, type CampaignRow } from "@/lib/csv-parse";
 
 export const Route = createFileRoute("/")({
+import {
+  parseCampaignCsv,
+  extractUnique,
+  type CampaignRow,
+  type DatasetType,
+  DATASET_LABELS,
+} from "@/lib/csv-parse";
+
+export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "AdPilot AI — Google Ads optimisation dashboard" },
@@ -78,9 +87,38 @@ export const Route = createFileRoute("/")({
 
 type ActionStatus = "pending" | "approved" | "rejected";
 
+type Dataset = {
+  id: string;
+  name: string;
+  filename: string;
+  rows: CampaignRow[];
+  headers: string[];
+  rawHeaders: string[];
+  type: DatasetType;
+  enabled: boolean;
+  filters: {
+    campaigns: string[];
+    devices: string[];
+    countries: string[];
+    platforms: string[];
+    industries: string[];
+    adGroups: string[];
+  };
+};
+
+function makeDatasetFilters(rows: CampaignRow[]): Dataset["filters"] {
+  return {
+    campaigns: extractUnique(rows, "campaign"),
+    devices: extractUnique(rows, "device"),
+    countries: extractUnique(rows, "country"),
+    platforms: extractUnique(rows, "platform"),
+    industries: extractUnique(rows, "industry"),
+    adGroups: extractUnique(rows, "ad_group"),
+  };
+}
+
 function AdPilotDashboard() {
   // ---------- Config state ----------
-  const [dataSource, setDataSource] = useState<"upload" | "demo" | "google">("demo");
   const [websiteUrl, setWebsiteUrl] = useState("https://acme.example");
   const [marketingNotes, setMarketingNotes] = useState(
     "We sell B2B CRM software, ICP is 50–500 employee SaaS companies in NA.",
@@ -95,9 +133,6 @@ function AdPilotDashboard() {
   const [conversionType, setConversionType] = useState("Form submission");
 
   const [dateRange, setDateRange] = useState("Last 30 days");
-  const [campaigns, setCampaigns] = useState<string[]>(mockCampaigns);
-  const [devices, setDevices] = useState<string[]>(["Desktop", "Mobile", "Tablet"]);
-  const [country, setCountry] = useState("United States");
   const [matchType, setMatchType] = useState("All");
   const [minImpressions, setMinImpressions] = useState("500");
   const [minClicks, setMinClicks] = useState("50");
@@ -112,121 +147,65 @@ function AdPilotDashboard() {
   const [maxBudgetChange, setMaxBudgetChange] = useState("20");
 
   const [actionMode, setActionMode] = useState<"insights" | "approval" | "automatic">("approval");
+  const [useDemoData, setUseDemoData] = useState(true);
 
-  // ---------- CSV upload state ----------
+  // ---------- Multi-CSV state ----------
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [uploadedRows, setUploadedRows] = useState<CampaignRow[]>([]);
-  const [uploadedFilename, setUploadedFilename] = useState<string | null>(null);
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const csvCampaigns = useMemo(
-    () => (uploadedRows.length ? extractUnique(uploadedRows, "campaign") : mockCampaigns),
-    [uploadedRows],
-  );
-  const csvDevices = useMemo(
-    () => (uploadedRows.length ? extractUnique(uploadedRows, "device") : ["Desktop", "Mobile", "Tablet"]),
-    [uploadedRows],
-  );
-  const csvCountries = useMemo(
-    () => (uploadedRows.length ? extractUnique(uploadedRows, "country") : mockCountries),
-    [uploadedRows],
-  );
+  const enabledDatasets = useMemo(() => datasets.filter((d) => d.enabled), [datasets]);
 
-  async function handleCsvFile(file: File) {
+  async function handleCsvFiles(files: FileList) {
     setUploadError(null);
-    try {
-      const text = await file.text();
-      const rows = parseCampaignCsv(text);
-      if (!rows.length) throw new Error("No data rows found.");
-      setUploadedRows(rows);
-      setUploadedFilename(file.name);
-      setDataSource("upload");
-      setCampaigns(extractUnique(rows, "campaign"));
-      const devs = extractUnique(rows, "device");
-      if (devs.length) setDevices(devs);
-      const countries = extractUnique(rows, "country");
-      if (countries.length && !countries.includes(country)) setCountry(countries[0]);
-      toast.success("CSV loaded", { description: `${file.name} · ${rows.length} rows` });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to parse CSV";
-      setUploadError(msg);
-      toast.error("CSV upload failed", { description: msg });
+    const next: Dataset[] = [];
+    for (const file of Array.from(files)) {
+      try {
+        const text = await file.text();
+        const parsed = parseCampaignCsv(text);
+        if (!parsed.rows.length) throw new Error(`${file.name}: no data rows.`);
+        next.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: file.name.replace(/\.csv$/i, ""),
+          filename: file.name,
+          rows: parsed.rows,
+          headers: parsed.headers,
+          rawHeaders: parsed.rawHeaders,
+          type: parsed.detectedType,
+          enabled: true,
+          filters: makeDatasetFilters(parsed.rows),
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Failed to parse CSV";
+        setUploadError(msg);
+        toast.error("CSV upload failed", { description: msg });
+      }
+    }
+    if (next.length) {
+      setDatasets((prev) => [...prev, ...next]);
+      setUseDemoData(false);
+      toast.success(`${next.length} file${next.length > 1 ? "s" : ""} loaded`, {
+        description: next.map((d) => `${d.filename} · ${d.rows.length} rows`).join("\n"),
+      });
     }
   }
 
-  // ---------- Results state ----------
-  const [analyzing, setAnalyzing] = useState(false);
-  const [recommendations, setRecommendations] = useState<Recommendation[]>(mockRecommendations);
-  const [summary, setSummary] = useState(mockSummary);
-  const [status, setStatus] = useState<Record<string, ActionStatus>>({});
-  const [history, setHistory] = useState<
-    { id: string; action: string; outcome: ActionStatus; at: string }[]
-  >([]);
-
-  const filtered = useMemo(
-    () => recommendations.filter((r) => r.confidence >= minConfidence[0]),
-    [recommendations, minConfidence],
-  );
-
-  const goalProgress = useMemo(() => {
-    if (primaryKpi === "CPA") {
-      const target = Number(targetKpi) || 0;
-      if (!target) return 0;
-      return Math.min(100, Math.round((target / summary.cpa) * 100));
-    }
-    return Math.min(100, Math.round((summary.roas / Number(targetKpi || 1)) * 100));
-  }, [primaryKpi, targetKpi, summary]);
-
-  async function handleAnalyze() {
-    setAnalyzing(true);
-    try {
-      const payload = {
-        config: {
-          dataSource,
-          websiteUrl,
-          marketingNotes,
-          objective,
-          primaryKpi,
-          targetKpi: Number(targetKpi),
-          budgetPeriod,
-          budgetAmount: Number(budgetAmount),
-          targetCountry,
-          conversionType,
-        },
-        filters: {
-          dateRange,
-          campaigns,
-          devices,
-          country,
-          matchType,
-          minImpressions: Number(minImpressions),
-          minClicks: Number(minClicks),
-          minSpend: Number(minSpend),
-          minConversions: Number(minConversions),
-          zeroConvOnly,
-          minConfidence: minConfidence[0],
-        },
-        rules: {
-          zeroConvSpend: Number(zeroConvSpend),
-          highCpaPct: Number(highCpaPct),
-          maxBidChange: Number(maxBidChange),
-          maxBudgetChange: Number(maxBudgetChange),
-        },
-        actionMode,
-        campaignsData: uploadedRows.length
-          ? { source: "upload", filename: uploadedFilename, rowCount: uploadedRows.length, rows: uploadedRows }
-          : { source: dataSource, mock: true },
-      };
-      const res = await analyzeAccount({ data: payload });
-      setSummary(res.summary);
-      setRecommendations(res.recommendations);
-      toast.success("Analysis complete", { description: `${res.recommendations.length} recommendations.` });
-    } catch (e) {
-      toast.error("Analysis failed", { description: e instanceof Error ? e.message : "Unknown error" });
-    } finally {
-      setAnalyzing(false);
-    }
+  function updateDataset(id: string, patch: Partial<Dataset>) {
+    setDatasets((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)));
   }
+  function removeDataset(id: string) {
+    setDatasets((ds) => ds.filter((d) => d.id !== id));
+  }
+  function updateDatasetFilter<K extends keyof Dataset["filters"]>(
+    id: string,
+    key: K,
+    value: Dataset["filters"][K],
+  ) {
+    setDatasets((ds) =>
+      ds.map((d) => (d.id === id ? { ...d, filters: { ...d.filters, [key]: value } } : d)),
+    );
+  }
+
 
   function decide(id: string, outcome: ActionStatus) {
     setStatus((s) => ({ ...s, [id]: outcome }));
