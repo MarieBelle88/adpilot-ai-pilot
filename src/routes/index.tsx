@@ -444,70 +444,70 @@ function AdPilotDashboard() {
                 )}
 
                 <FieldLabel>Website URL</FieldLabel>
-                <Input value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://" className="bg-sidebar-accent/40" />
+                <Input value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://" className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
                 <FieldLabel>Marketing notes</FieldLabel>
-                <Textarea value={marketingNotes} onChange={(e) => setMarketingNotes(e.target.value)} rows={3} className="bg-sidebar-accent/40" />
+                <Textarea value={marketingNotes} onChange={(e) => setMarketingNotes(e.target.value)} rows={3} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
               </Section>
 
               <Section title="Business goal" icon={<Target className="h-4 w-4" />} defaultOpen>
                 <FieldLabel>Objective</FieldLabel>
                 <Select value={objective} onValueChange={setObjective}>
-                  <SelectTrigger className="bg-sidebar-accent/40"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["leads", "sales", "traffic", "awareness"].map((o) => <SelectItem key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FieldLabel>Primary KPI</FieldLabel>
                 <Select value={primaryKpi} onValueChange={setPrimaryKpi}>
-                  <SelectTrigger className="bg-sidebar-accent/40"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["CPA", "ROAS", "Conversions", "Revenue"].map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FieldLabel>Target KPI value</FieldLabel>
-                <Input value={targetKpi} onChange={(e) => setTargetKpi(e.target.value)} className="bg-sidebar-accent/40" />
+                <Input value={targetKpi} onChange={(e) => setTargetKpi(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
                 <FieldLabel>Budget</FieldLabel>
                 <div className="flex gap-2">
                   <Select value={budgetPeriod} onValueChange={(v) => setBudgetPeriod(v as typeof budgetPeriod)}>
-                    <SelectTrigger className="w-28 bg-sidebar-accent/40"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-28 bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="daily">Daily</SelectItem>
                       <SelectItem value="monthly">Monthly</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Input value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} className="bg-sidebar-accent/40" />
+                  <Input value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
                 </div>
                 <FieldLabel>Target country</FieldLabel>
                 <Select value={targetCountry} onValueChange={setTargetCountry}>
-                  <SelectTrigger className="bg-sidebar-accent/40"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {mockCountries.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FieldLabel>Conversion type</FieldLabel>
-                <Input value={conversionType} onChange={(e) => setConversionType(e.target.value)} className="bg-sidebar-accent/40" />
+                <Input value={conversionType} onChange={(e) => setConversionType(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
               </Section>
 
               <Section title="Global filters" icon={<Filter className="h-4 w-4" />}>
                 <FieldLabel>Date range</FieldLabel>
                 <Select value={dateRange} onValueChange={setDateRange}>
-                  <SelectTrigger className="bg-sidebar-accent/40"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["Last 7 days", "Last 30 days", "Last 90 days", "This quarter"].map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FieldLabel>Match type</FieldLabel>
                 <Select value={matchType} onValueChange={setMatchType}>
-                  <SelectTrigger className="bg-sidebar-accent/40"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["All", "Exact", "Phrase", "Broad"].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <div className="grid grid-cols-2 gap-2">
-                  <div><FieldLabel>Min impressions</FieldLabel><Input value={minImpressions} onChange={(e) => setMinImpressions(e.target.value)} className="bg-sidebar-accent/40" /></div>
-                  <div><FieldLabel>Min clicks</FieldLabel><Input value={minClicks} onChange={(e) => setMinClicks(e.target.value)} className="bg-sidebar-accent/40" /></div>
-                  <div><FieldLabel>Min spend</FieldLabel><Input value={minSpend} onChange={(e) => setMinSpend(e.target.value)} className="bg-sidebar-accent/40" /></div>
-                  <div><FieldLabel>Min conversions</FieldLabel><Input value={minConversions} onChange={(e) => setMinConversions(e.target.value)} className="bg-sidebar-accent/40" /></div>
+                  <div><FieldLabel>Min impressions</FieldLabel><Input value={minImpressions} onChange={(e) => setMinImpressions(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" /></div>
+                  <div><FieldLabel>Min clicks</FieldLabel><Input value={minClicks} onChange={(e) => setMinClicks(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" /></div>
+                  <div><FieldLabel>Min spend</FieldLabel><Input value={minSpend} onChange={(e) => setMinSpend(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" /></div>
+                  <div><FieldLabel>Min conversions</FieldLabel><Input value={minConversions} onChange={(e) => setMinConversions(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" /></div>
                 </div>
                 <div className="mt-2 flex items-center justify-between rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
                   <Label htmlFor="zero" className="text-sm">Zero-conversion items only</Label>
@@ -519,13 +519,13 @@ function AdPilotDashboard() {
 
               <Section title="Decision rules" icon={<Settings2 className="h-4 w-4" />}>
                 <FieldLabel>Zero-conversion spend threshold ($)</FieldLabel>
-                <Input value={zeroConvSpend} onChange={(e) => setZeroConvSpend(e.target.value)} className="bg-sidebar-accent/40" />
+                <Input value={zeroConvSpend} onChange={(e) => setZeroConvSpend(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
                 <FieldLabel>High CPA threshold (% of target)</FieldLabel>
-                <Input value={highCpaPct} onChange={(e) => setHighCpaPct(e.target.value)} className="bg-sidebar-accent/40" />
+                <Input value={highCpaPct} onChange={(e) => setHighCpaPct(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
                 <FieldLabel>Maximum bid change (%)</FieldLabel>
-                <Input value={maxBidChange} onChange={(e) => setMaxBidChange(e.target.value)} className="bg-sidebar-accent/40" />
+                <Input value={maxBidChange} onChange={(e) => setMaxBidChange(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
                 <FieldLabel>Maximum budget change (%)</FieldLabel>
-                <Input value={maxBudgetChange} onChange={(e) => setMaxBudgetChange(e.target.value)} className="bg-sidebar-accent/40" />
+                <Input value={maxBudgetChange} onChange={(e) => setMaxBudgetChange(e.target.value)} className="bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50" />
               </Section>
 
               <Section title="Action mode" icon={<Activity className="h-4 w-4" />} defaultOpen>
@@ -722,7 +722,7 @@ function DatasetCard({
           <Input
             value={dataset.name}
             onChange={(e) => onChange({ name: e.target.value })}
-            className="h-7 bg-sidebar text-xs"
+            className="h-7 bg-sidebar text-sidebar-foreground placeholder:text-sidebar-foreground/50 text-xs"
           />
           <div className="mt-1 truncate text-[11px] text-sidebar-foreground/60">
             {dataset.filename} · {dataset.rowCount.toLocaleString()} rows
@@ -732,7 +732,7 @@ function DatasetCard({
               value={dataset.datasetType}
               onValueChange={(v) => onChange({ datasetType: v as DatasetType })}
             >
-              <SelectTrigger className="h-7 bg-sidebar text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-7 bg-sidebar text-sidebar-foreground placeholder:text-sidebar-foreground/50 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {(Object.keys(DATASET_LABELS) as DatasetType[]).map((t) => (
                   <SelectItem key={t} value={t}>{DATASET_LABELS[t]}</SelectItem>
@@ -847,7 +847,7 @@ function NumIn({ label, value, onChange }: { label: string; value: string; onCha
   return (
     <div>
       <Label className="mb-1 block text-[11px] text-sidebar-foreground/60">{label}</Label>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} className="h-7 bg-sidebar text-xs" />
+      <Input value={value} onChange={(e) => onChange(e.target.value)} className="h-7 bg-sidebar text-sidebar-foreground placeholder:text-sidebar-foreground/50 text-xs" />
     </div>
   );
 }
@@ -857,7 +857,7 @@ function DateRangeSelect({ value, onChange }: { value: string; onChange: (v: str
     <div>
       <Label className="mb-1 block text-[11px] text-sidebar-foreground/60">Date range</Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-7 bg-sidebar text-xs"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-7 bg-sidebar text-sidebar-foreground placeholder:text-sidebar-foreground/50 text-xs"><SelectValue /></SelectTrigger>
         <SelectContent>
           {["Last 7 days", "Last 30 days", "Last 90 days", "This quarter", "All time"].map((d) => (
             <SelectItem key={d} value={d}>{d}</SelectItem>
@@ -939,7 +939,7 @@ function Section({
   const [open, setOpen] = useState(!!defaultOpen);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/70 hover:bg-sidebar-accent/40">
+      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-sidebar-foreground/70 hover:bg-sidebar-accent/40 text-sidebar-foreground placeholder:text-sidebar-foreground/50">
         <span className="flex items-center gap-2">{icon}{title}</span>
         <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
       </CollapsibleTrigger>
