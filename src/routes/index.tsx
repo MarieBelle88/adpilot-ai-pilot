@@ -265,6 +265,42 @@ function AdPilotDashboard() {
                     <Badge variant="outline" className="border-warning/50 text-warning">Experimental</Badge>
                   </div>
                 </RadioGroup>
+                {dataSource === "upload" && (
+                  <div className="space-y-2 rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void handleCsvFile(f);
+                        e.target.value = "";
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="mr-1 h-3.5 w-3.5" />
+                      {uploadedFilename ? "Replace CSV" : "Choose CSV file"}
+                    </Button>
+                    {uploadedFilename ? (
+                      <div className="text-xs text-sidebar-foreground/70">
+                        <div className="truncate font-medium text-sidebar-foreground">{uploadedFilename}</div>
+                        <div>{uploadedRows.length.toLocaleString()} rows · {csvCampaigns.length} campaigns · {csvDevices.length} devices · {csvCountries.length} locations</div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-sidebar-foreground/60">
+                        Accepts columns: date, campaign, keyword, country, device, impressions, clicks, cost, conversions, conversion_value.
+                      </p>
+                    )}
+                    {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+                  </div>
+                )}
                 <FieldLabel>Website URL</FieldLabel>
                 <Input value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://" className="bg-sidebar-accent/40" />
                 <FieldLabel>Marketing notes</FieldLabel>
