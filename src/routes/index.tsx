@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -54,6 +54,7 @@ import {
   type Recommendation,
 } from "@/lib/adpilot-mock";
 import { cn } from "@/lib/utils";
+import { parseCampaignCsv, extractUnique, type CampaignRow } from "@/lib/csv-parse";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -107,6 +108,47 @@ function AdPilotDashboard() {
   const [maxBudgetChange, setMaxBudgetChange] = useState("20");
 
   const [actionMode, setActionMode] = useState<"insights" | "approval" | "automatic">("approval");
+
+  // ---------- CSV upload state ----------
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadedRows, setUploadedRows] = useState<CampaignRow[]>([]);
+  const [uploadedFilename, setUploadedFilename] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const csvCampaigns = useMemo(
+    () => (uploadedRows.length ? extractUnique(uploadedRows, "campaign") : mockCampaigns),
+    [uploadedRows],
+  );
+  const csvDevices = useMemo(
+    () => (uploadedRows.length ? extractUnique(uploadedRows, "device") : ["Desktop", "Mobile", "Tablet"]),
+    [uploadedRows],
+  );
+  const csvCountries = useMemo(
+    () => (uploadedRows.length ? extractUnique(uploadedRows, "country") : mockCountries),
+    [uploadedRows],
+  );
+
+  async function handleCsvFile(file: File) {
+    setUploadError(null);
+    try {
+      const text = await file.text();
+      const rows = parseCampaignCsv(text);
+      if (!rows.length) throw new Error("No data rows found.");
+      setUploadedRows(rows);
+      setUploadedFilename(file.name);
+      setDataSource("upload");
+      setCampaigns(extractUnique(rows, "campaign"));
+      const devs = extractUnique(rows, "device");
+      if (devs.length) setDevices(devs);
+      const countries = extractUnique(rows, "country");
+      if (countries.length && !countries.includes(country)) setCountry(countries[0]);
+      toast.success("CSV loaded", { description: `${file.name} · ${rows.length} rows` });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to parse CSV";
+      setUploadError(msg);
+      toast.error("CSV upload failed", { description: msg });
+    }
+  }
 
   // ---------- Results state ----------
   const [analyzing, setAnalyzing] = useState(false);
@@ -167,7 +209,9 @@ function AdPilotDashboard() {
           maxBudgetChange: Number(maxBudgetChange),
         },
         actionMode,
-        campaignsData: { source: dataSource, mock: true },
+        campaignsData: uploadedRows.length
+          ? { source: "upload", filename: uploadedFilename, rowCount: uploadedRows.length, rows: uploadedRows }
+          : { source: dataSource, mock: true },
       };
       const res = await analyzeAccount({ data: payload });
       setSummary(res.summary);
@@ -221,6 +265,42 @@ function AdPilotDashboard() {
                     <Badge variant="outline" className="border-warning/50 text-warning">Experimental</Badge>
                   </div>
                 </RadioGroup>
+                {dataSource === "upload" && (
+                  <div className="space-y-2 rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void handleCsvFile(f);
+                        e.target.value = "";
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="mr-1 h-3.5 w-3.5" />
+                      {uploadedFilename ? "Replace CSV" : "Choose CSV file"}
+                    </Button>
+                    {uploadedFilename ? (
+                      <div className="text-xs text-sidebar-foreground/70">
+                        <div className="truncate font-medium text-sidebar-foreground">{uploadedFilename}</div>
+                        <div>{uploadedRows.length.toLocaleString()} rows · {csvCampaigns.length} campaigns · {csvDevices.length} devices · {csvCountries.length} locations</div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-sidebar-foreground/60">
+                        Accepts columns: date, campaign, keyword, country, device, impressions, clicks, cost, conversions, conversion_value.
+                      </p>
+                    )}
+                    {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+                  </div>
+                )}
                 <FieldLabel>Website URL</FieldLabel>
                 <Input value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://" className="bg-sidebar-accent/40" />
                 <FieldLabel>Marketing notes</FieldLabel>
@@ -275,14 +355,14 @@ function AdPilotDashboard() {
                   </SelectContent>
                 </Select>
                 <FieldLabel>Campaigns</FieldLabel>
-                <MultiCheckList options={mockCampaigns} value={campaigns} onChange={setCampaigns} />
+                <MultiCheckList options={csvCampaigns} value={campaigns} onChange={setCampaigns} />
                 <FieldLabel>Devices</FieldLabel>
-                <MultiCheckList options={["Desktop", "Mobile", "Tablet"]} value={devices} onChange={setDevices} />
+                <MultiCheckList options={csvDevices} value={devices} onChange={setDevices} />
                 <FieldLabel>Country</FieldLabel>
                 <Select value={country} onValueChange={setCountry}>
                   <SelectTrigger className="bg-sidebar-accent/40"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {mockCountries.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {csvCountries.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FieldLabel>Match type</FieldLabel>
