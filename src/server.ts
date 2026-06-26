@@ -39,6 +39,29 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    // Proxy /analyze to the local FastAPI backend — avoids Vite proxy / Daytona tunnel issues
+    const url = new URL(request.url);
+    if (url.pathname === "/analyze") {
+      try {
+        const body = await request.text();
+        const res = await fetch("http://localhost:8000/analyze", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body,
+        });
+        const text = await res.text();
+        return new Response(text, {
+          status: res.status,
+          headers: { "content-type": "application/json", "access-control-allow-origin": "*" },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: String(err) }), {
+          status: 502,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    }
+
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);

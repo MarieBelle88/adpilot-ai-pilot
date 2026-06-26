@@ -1,14 +1,5 @@
-// Resolve the backend URL at runtime:
-// 1. Env override (VITE_ANALYZE_URL) — explicit override
-// 2. Relative URL "/analyze" — Vite dev server proxies to http://localhost:8000
-//    Works locally and through Daytona sandbox proxy (no cross-origin issues)
-function resolveAnalyzeUrl(): string {
-  const envUrl = import.meta.env.VITE_ANALYZE_URL as string | undefined;
-  if (envUrl) return envUrl;
-  return "/analyze";
-}
-
-export const ANALYZE_URL = resolveAnalyzeUrl();
+// Always use relative /analyze — server.ts intercepts it and proxies to localhost:8000
+export const ANALYZE_URL = "/analyze";
 
 export type AnalyzeDataset = {
   filename: string;
