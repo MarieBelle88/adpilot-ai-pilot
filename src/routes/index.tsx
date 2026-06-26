@@ -295,20 +295,10 @@ function AdPilotDashboard() {
 
   // ---------- Results state ----------
   const [analyzing, setAnalyzing] = useState(false);
-  const [recommendations, setRecommendations] = useState<Recommendation[]>(mockRecommendations);
-  const [summary, setSummary] = useState(mockSummary);
   const [status, setStatus] = useState<Record<string, ActionStatus>>({});
   const [history, setHistory] = useState<
-    { id: string; action: string; outcome: ActionStatus; at: string }[]
+    { id: string; action: string; outcome: ActionStatus; at: string; simulated: boolean }[]
   >([]);
-  const [lastRequest, setLastRequest] = useState<{
-    at: string;
-    datasetCount: number;
-    totalRows: number;
-    objective: string;
-    primaryKpi: string;
-    actionMode: string;
-  } | null>(null);
 
   // ---------- Analysis result state ----------
   const [analysisResult, setAnalysisResult] = useState<{
@@ -317,11 +307,38 @@ function AdPilotDashboard() {
     recommendations: BackendRecommendation[];
   } | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [lastAnalyzeStats, setLastAnalyzeStats] = useState<{
+    datasetCount: number;
+    totalRows: number;
+  } | null>(null);
 
+  const displayRecs: BackendRecommendation[] = useMemo(() => {
+    if (analysisResult?.recommendations?.length) {
+      return analysisResult.recommendations.map((r, i) => ({
+        ...r,
+        id: r.id ?? `rec-${i}`,
+      }));
+    }
+    return mockRecommendations.map(mockToBackendRec);
+  }, [analysisResult]);
+
+  const summary = useMemo(() => {
+    const s = analysisResult?.summary;
+    if (!s) return mockSummary;
+    return {
+      ...mockSummary,
+      spend: s.spend ?? mockSummary.spend,
+      clicks: s.clicks ?? mockSummary.clicks,
+      conversions: s.conversions ?? mockSummary.conversions,
+      cpa: s.cpa ?? mockSummary.cpa,
+      roas: s.roas ?? mockSummary.roas,
+      wastedSpend: s.wastedSpend ?? mockSummary.wastedSpend,
+    };
+  }, [analysisResult]);
 
   const filtered = useMemo(
-    () => recommendations.filter((r) => r.confidence >= minConfidence[0]),
-    [recommendations, minConfidence],
+    () => displayRecs.filter((r) => (r.confidence ?? 0) >= minConfidence[0]),
+    [displayRecs, minConfidence],
   );
 
   const goalProgress = useMemo(() => {
@@ -333,78 +350,87 @@ function AdPilotDashboard() {
     return Math.min(100, Math.round((summary.roas / Number(targetKpi || 1)) * 100));
   }, [primaryKpi, targetKpi, summary]);
 
-  function handleAnalyze() {
+  async function runAnalyze() {
     setAnalyzing(true);
-    try {
-      const payload = {
-        businessGoal: {
-          objective,
-          primaryKpi,
-          targetKpi: Number(targetKpi),
-          budgetPeriod,
-          budgetAmount: Number(budgetAmount),
-          targetCountry,
-          conversionType,
-          websiteUrl,
-          marketingNotes,
-        },
-        globalRules: {
-          dateRange,
-          matchType,
-          minImpressions: Number(minImpressions),
-          minClicks: Number(minClicks),
-          minSpend: Number(minSpend),
-          minConversions: Number(minConversions),
-          zeroConvOnly,
-          minConfidence: minConfidence[0],
-          zeroConvSpend: Number(zeroConvSpend),
-          highCpaPct: Number(highCpaPct),
-          maxBidChange: Number(maxBidChange),
-          maxBudgetChange: Number(maxBudgetChange),
-        },
-        actionMode,
-        // Each dataset is sent separately — never combined.
-        datasets: enabledDatasets.map((d) => ({
-          id: d.id,
-          filename: d.filename,
-          datasetType: d.datasetType,
-          enabled: d.enabled,
-          columns: d.columns,
-          rowCount: d.rowCount,
-          rows: d.rows,
-          filters: d.filters,
-        })),
-      };
-      // Backend not connected yet. Log payload for inspection.
-      // eslint-disable-next-line no-console
-      console.log("[AdPilot] Analyze payload", payload);
-      const totalRows = payload.datasets.reduce((s, d) => s + d.rowCount, 0);
-      setLastRequest({
-        at: new Date().toLocaleString(),
-        datasetCount: payload.datasets.length,
-        totalRows,
+    setAnalysisError(null);
+    const payload = {
+      businessGoal: {
         objective,
         primaryKpi,
-        actionMode,
+        targetKpi: Number(targetKpi),
+        budgetPeriod,
+        budgetAmount: Number(budgetAmount),
+        targetCountry,
+        conversionType,
+        websiteUrl,
+        marketingNotes,
+      },
+      globalRules: {
+        dateRange,
+        matchType,
+        minImpressions: Number(minImpressions),
+        minClicks: Number(minClicks),
+        minSpend: Number(minSpend),
+        minConversions: Number(minConversions),
+        zeroConvOnly,
+        minConfidence: minConfidence[0],
+        zeroConvSpend: Number(zeroConvSpend),
+        highCpaPct: Number(highCpaPct),
+        maxBidChange: Number(maxBidChange),
+        maxBudgetChange: Number(maxBudgetChange),
+      },
+      actionMode,
+      datasets: enabledDatasets.map((d) => ({
+        filename: d.filename,
+        datasetType: d.datasetType,
+        enabled: d.enabled,
+        filters: d.filters,
+        rows: d.rows,
+      })),
+    };
+    const totalRows = payload.datasets.reduce((s, d) => s + d.rows.length, 0);
+    setLastAnalyzeStats({ datasetCount: payload.datasets.length, totalRows });
+    // eslint-disable-next-line no-console
+    console.log("[AdPilot] Analyze payload", payload);
+    try {
+      const res = await analyzeAccountApi(payload);
+      setAnalysisResult({
+        summary: res.summary,
+        executiveSummary: res.executiveSummary,
+        recommendations: res.recommendations ?? [],
       });
-      toast.success("Payload logged to console", {
-        description: `${payload.datasets.length} dataset${payload.datasets.length === 1 ? "" : "s"} · ${totalRows.toLocaleString()} rows`,
+      setStatus({});
+      toast.success("Analysis complete", {
+        description: `${res.recommendations?.length ?? 0} recommendation(s)`,
       });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Analyze request failed";
+      setAnalysisError(msg);
+      toast.error("Analyze failed", { description: msg });
     } finally {
       setAnalyzing(false);
     }
   }
 
+  function handleAnalyze() {
+    void runAnalyze();
+  }
+
   function decide(id: string, outcome: ActionStatus) {
     setStatus((s) => ({ ...s, [id]: outcome }));
-    const rec = recommendations.find((r) => r.id === id);
+    const rec = displayRecs.find((r) => r.id === id);
     if (rec) {
-      setHistory((h) => [{ id, action: rec.action, outcome, at: new Date().toLocaleString() }, ...h]);
-      toast(outcome === "approved" ? "Approved" : outcome === "rejected" ? "Rejected" : "Edited", {
-        description: rec.action,
+      const label = rec.title ?? rec.target ?? id;
+      setHistory((h) => [
+        { id, action: label, outcome, at: new Date().toLocaleString(), simulated: true },
+        ...h,
+      ]);
+      toast(outcome === "approved" ? "Approved (simulated)" : outcome === "rejected" ? "Rejected" : "Edited", {
+        description: label,
       });
     }
   }
+
 
   const sourceLabel =
     enabledDatasets.length > 0
