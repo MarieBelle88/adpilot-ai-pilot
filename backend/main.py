@@ -394,6 +394,8 @@ def analyze_website_context(website_text: str, ads_data: dict) -> list:
 
 
 class NewAnalyzeRequest(BaseModel):
+    websiteUrl: str = ""
+    marketingNotes: str = ""
     businessGoal: Dict[str, Any] = {}
     globalRules: Dict[str, Any] = {}
     actionMode: str = "approval"
@@ -601,7 +603,7 @@ async def analyze_new(request: NewAnalyzeRequest):
     """New-style endpoint matching the frontend's api.ts AnalyzeRequest shape."""
     goal = request.businessGoal
     rules = request.globalRules
-    website_url = str(goal.get("websiteUrl") or "").strip()
+    website_url = str(request.websiteUrl or goal.get("websiteUrl") or "").strip()
 
     # Collect all CSV rows from enabled datasets
     all_rows = [
