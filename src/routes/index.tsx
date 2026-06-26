@@ -110,6 +110,14 @@ type MarketFilters = {
 };
 type DatasetFilters = KeywordFilters | AdGroupFilters | MarketFilters | Record<string, never>;
 
+type DatasetStats = {
+  totalRows: number;
+  usableRows: number;
+  problematicRows: number;
+  invalidDates: number;
+  missingByColumn: Record<string, number>;
+};
+
 type Dataset = {
   id: string;
   name: string;
@@ -121,9 +129,10 @@ type Dataset = {
   rowCount: number;
   rows: CampaignRow[];
   filters: DatasetFilters;
+  stats: DatasetStats;
 };
 
-function makeFiltersFor(type: DatasetType): DatasetFilters {
+function makeFiltersFor(type: DatasetType, rows?: CampaignRow[]): DatasetFilters {
   if (type === "keyword")
     return {
       campaigns: [], keywords: [], devices: [], countries: [],
@@ -134,11 +143,16 @@ function makeFiltersFor(type: DatasetType): DatasetFilters {
       months: [], adGroups: [], devices: [],
       minCost: "", minRevenue: "", negativeProfitOnly: false,
     };
-  if (type === "market")
+  if (type === "market") {
+    // Default platform to "Google Ads" when present in the uploaded data.
+    const platforms = rows ? extractUnique(rows, "platform") : [];
+    const hasGoogle = platforms.find((p) => /google ads/i.test(p));
     return {
-      platforms: [], campaignTypes: [], countries: [], industries: [],
+      platforms: hasGoogle ? [hasGoogle] : [],
+      campaignTypes: [], countries: [], industries: [],
       minCpa: "", minRoas: "", dateRange: "Last 30 days",
     };
+  }
   return {};
 }
 
@@ -209,7 +223,8 @@ function AdPilotDashboard() {
           rawHeaders: parsed.rawHeaders,
           rowCount: parsed.rows.length,
           rows: parsed.rows,
-          filters: makeFiltersFor(parsed.detectedType),
+          filters: makeFiltersFor(parsed.detectedType, parsed.rows),
+          stats: parsed.stats,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to parse CSV";
@@ -230,7 +245,7 @@ function AdPilotDashboard() {
         if (d.id !== id) return d;
         const merged = { ...d, ...patch };
         if (patch.datasetType && patch.datasetType !== d.datasetType) {
-          merged.filters = makeFiltersFor(patch.datasetType);
+          merged.filters = makeFiltersFor(patch.datasetType, d.rows);
         }
         return merged;
       }),
@@ -255,6 +270,14 @@ function AdPilotDashboard() {
   const [history, setHistory] = useState<
     { id: string; action: string; outcome: ActionStatus; at: string }[]
   >([]);
+  const [lastRequest, setLastRequest] = useState<{
+    at: string;
+    datasetCount: number;
+    totalRows: number;
+    objective: string;
+    primaryKpi: string;
+    actionMode: string;
+  } | null>(null);
 
   const filtered = useMemo(
     () => recommendations.filter((r) => r.confidence >= minConfidence[0]),
@@ -315,8 +338,17 @@ function AdPilotDashboard() {
       // Backend not connected yet. Log payload for inspection.
       // eslint-disable-next-line no-console
       console.log("[AdPilot] Analyze payload", payload);
+      const totalRows = payload.datasets.reduce((s, d) => s + d.rowCount, 0);
+      setLastRequest({
+        at: new Date().toLocaleString(),
+        datasetCount: payload.datasets.length,
+        totalRows,
+        objective,
+        primaryKpi,
+        actionMode,
+      });
       toast.success("Payload logged to console", {
-        description: `${payload.datasets.length} dataset${payload.datasets.length === 1 ? "" : "s"} ready for analysis.`,
+        description: `${payload.datasets.length} dataset${payload.datasets.length === 1 ? "" : "s"} · ${totalRows.toLocaleString()} rows`,
       });
     } finally {
       setAnalyzing(false);
@@ -529,6 +561,29 @@ function AdPilotDashboard() {
           </header>
 
           <div className="space-y-6 p-4 sm:p-6">
+            {lastRequest && (
+              <Alert className="border-primary/40 bg-primary/5">
+                <Check className="h-4 w-4 text-primary" />
+                <AlertTitle>Analyze request sent · {lastRequest.at}</AlertTitle>
+                <AlertDescription>
+                  {lastRequest.datasetCount} enabled dataset{lastRequest.datasetCount === 1 ? "" : "s"} ·{" "}
+                  {lastRequest.totalRows.toLocaleString()} rows · goal{" "}
+                  <span className="font-medium">{lastRequest.objective}</span> ({lastRequest.primaryKpi}) ·
+                  action mode <span className="font-medium">{lastRequest.actionMode}</span>. Payload logged
+                  to the browser console.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Alert className="border-warning/40 bg-warning/10">
+              <Sparkles className="h-4 w-4 text-warning" />
+              <AlertTitle>Demo Results — real analysis is not connected yet.</AlertTitle>
+              <AlertDescription>
+                The metrics and recommendations below are fixed sample data. Uploaded CSVs are parsed and
+                logged but not yet scored.
+              </AlertDescription>
+            </Alert>
+
             {!summary.trackingHealthy && (
               <Alert className="border-warning/40 bg-warning/10 text-foreground">
                 <ShieldAlert className="h-4 w-4 text-warning" />
@@ -833,7 +888,9 @@ function DatasetPreview({ dataset }: { dataset: Dataset }) {
               <tr key={i} className="border-t border-sidebar-border">
                 {dataset.columns.map((c) => (
                   <td key={c} className="whitespace-nowrap px-2 py-1 text-sidebar-foreground/80">
-                    {String(row[c] ?? "")}
+                    {row[c] === null || row[c] === undefined || row[c] === ""
+                      ? <span className="text-sidebar-foreground/30">—</span>
+                      : String(row[c])}
                   </td>
                 ))}
               </tr>
@@ -841,6 +898,37 @@ function DatasetPreview({ dataset }: { dataset: Dataset }) {
           </tbody>
         </table>
       </div>
+      <div className="mt-2 grid grid-cols-3 gap-2 text-[10px]">
+        <StatBox label="Usable rows" value={dataset.stats.usableRows.toLocaleString()} />
+        <StatBox label="Problematic rows" value={dataset.stats.problematicRows.toLocaleString()} />
+        <StatBox label="Invalid dates" value={dataset.stats.invalidDates.toLocaleString()} />
+      </div>
+      <div className="mt-2">
+        <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">Missing values by column</div>
+        <div className="flex flex-wrap gap-1">
+          {dataset.columns.map((c) => {
+            const n = dataset.stats.missingByColumn[c] ?? 0;
+            if (n === 0) return null;
+            return (
+              <Badge key={c} variant="outline" className="text-[10px]">
+                {c}: {n}
+              </Badge>
+            );
+          })}
+          {dataset.columns.every((c) => (dataset.stats.missingByColumn[c] ?? 0) === 0) && (
+            <span className="text-[10px] text-sidebar-foreground/50">None</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-sidebar-border bg-sidebar px-2 py-1">
+      <div className="text-[9px] uppercase tracking-wide text-sidebar-foreground/50">{label}</div>
+      <div className="text-xs font-medium text-sidebar-foreground/90">{value}</div>
     </div>
   );
 }
