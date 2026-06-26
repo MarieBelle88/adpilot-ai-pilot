@@ -4,6 +4,8 @@ import {
   analyzeAccountApi,
   type BackendRecommendation,
   type BackendSummary,
+  type WebsiteContext,
+  type WebsiteRecommendation,
 } from "@/lib/api";
 import {
   Activity,
@@ -323,6 +325,8 @@ function AdPilotDashboard() {
           limitations?: unknown[];
         };
     recommendations: BackendRecommendation[];
+    websiteContext?: WebsiteContext;
+    websiteRecommendations?: WebsiteRecommendation[];
   } | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [lastAnalyzeStats, setLastAnalyzeStats] = useState<{
@@ -369,6 +373,31 @@ function AdPilotDashboard() {
     };
   }, [analysisResult, useDemoData]);
 
+
+  const datasetTotals = useMemo(() => {
+    let clicks = 0;
+    let impressions = 0;
+    let hasImpressions = false;
+    let hasClicks = false;
+    for (const d of enabledDatasets) {
+      for (const row of d.rows as unknown as Record<string, unknown>[]) {
+        const imp = Number(row?.impressions);
+        const clk = Number(row?.clicks);
+        if (Number.isFinite(imp)) { impressions += imp; hasImpressions = true; }
+        if (Number.isFinite(clk)) { clicks += clk; hasClicks = true; }
+      }
+    }
+    return { clicks, impressions, hasImpressions, hasClicks };
+  }, [enabledDatasets]);
+
+  const ctrDisplay = useMemo(() => {
+    if (datasetTotals.hasImpressions && datasetTotals.impressions > 0) {
+      const v = (datasetTotals.clicks / datasetTotals.impressions) * 100;
+      return `${v.toFixed(2)}%`;
+    }
+    if (useDemoData && summary.ctr) return `${summary.ctr.toFixed(2)}%`;
+    return "—";
+  }, [datasetTotals, useDemoData, summary.ctr]);
 
   const filtered = useMemo(
     () => displayRecs.filter((r) => (r.confidence ?? 0) >= minConfidence[0]),
@@ -448,12 +477,18 @@ function AdPilotDashboard() {
     setLastAnalyzeStats({ datasetCount: payload.datasets.length, totalRows });
     // eslint-disable-next-line no-console
     console.log("[AdPilot] Analyze payload", payload);
+    // eslint-disable-next-line no-console
+    console.log("[AdPilot] websiteUrl:", payload.websiteUrl, "marketingNotes:", payload.marketingNotes);
     try {
       const res = await analyzeAccountApi(payload);
+      // eslint-disable-next-line no-console
+      console.log("[AdPilot] Analyze response", res);
       setAnalysisResult({
         summary: res.summary,
         executiveSummary: res.executiveSummary,
         recommendations: res.recommendations ?? [],
+        websiteContext: res.websiteContext,
+        websiteRecommendations: res.websiteRecommendations,
       });
       setStatus({});
       toast.success("Analysis complete", {
@@ -781,7 +816,12 @@ function AdPilotDashboard() {
               </Alert>
             )}
 
-
+            {analysisResult && (analysisResult.websiteContext || (analysisResult.websiteRecommendations?.length ?? 0) > 0) && (
+              <WebsiteAnalysisCard
+                context={analysisResult.websiteContext}
+                recommendations={analysisResult.websiteRecommendations}
+              />
+            )}
 
 
             {!summary.trackingHealthy && (
@@ -798,7 +838,7 @@ function AdPilotDashboard() {
               <Stat label="CPA" value={`$${summary.cpa.toFixed(2)}`} />
               <Stat label="ROAS" value={`${summary.roas.toFixed(2)}×`} />
               <Stat label="Clicks" value={summary.clicks.toLocaleString()} />
-              <Stat label="CTR" value={`${summary.ctr.toFixed(2)}%`} />
+              <Stat label="CTR" value={ctrDisplay} />
             </div>
 
             <div className="grid gap-4 lg:grid-cols-3">
@@ -1299,3 +1339,114 @@ function ConfidenceBadge({ value }: { value: number }) {
     </div>
   );
 }
+
+function WebsiteAnalysisCard({
+  context,
+  recommendations,
+}: {
+  context?: WebsiteContext;
+  recommendations?: WebsiteRecommendation[];
+}) {
+  const failed = (context?.fetchStatus ?? "").toLowerCase() === "failed";
+  const topics = Array.isArray(context?.topics) ? (context!.topics as unknown[]) : [];
+  const headings = Array.isArray(context?.headings) ? (context!.headings as unknown[]) : [];
+  const recs = Array.isArray(recommendations) ? recommendations : [];
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Website analysis</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {failed ? (
+          <Alert className="border-destructive/40 bg-destructive/10">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <AlertTitle>Website analysis unavailable</AlertTitle>
+            <AlertDescription>
+              {renderTextLike(context?.warning) || "No further details."}
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              {context?.fetchStatus && (
+                <Badge variant="outline">Status: {renderTextLike(context.fetchStatus)}</Badge>
+              )}
+              {typeof context?.hasClearCta === "boolean" && (
+                <Badge variant="outline">
+                  Clear CTA: {context.hasClearCta ? "Yes" : "No"}
+                </Badge>
+              )}
+            </div>
+            {context?.title && (
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Title</div>
+                <div className="font-medium">{renderTextLike(context.title)}</div>
+              </div>
+            )}
+            {context?.businessSummary && (
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Business summary</div>
+                <p className="whitespace-pre-wrap">{renderTextLike(context.businessSummary)}</p>
+              </div>
+            )}
+            {topics.length > 0 && (
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Topics</div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {topics.map((t, i) => (
+                    <Badge key={`topic-${i}`} variant="secondary">{renderTextLike(t)}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {headings.length > 0 && (
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Headings</div>
+                <ul className="list-disc pl-5">
+                  {headings.map((h, i) => (
+                    <li key={`heading-${i}`}>{renderTextLike(h)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {context?.warning && (
+              <Alert className="border-warning/40 bg-warning/10">
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                <AlertDescription>{renderTextLike(context.warning)}</AlertDescription>
+              </Alert>
+            )}
+          </>
+        )}
+
+        {recs.length > 0 && (
+          <div>
+            <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+              Website recommendations
+            </div>
+            <div className="space-y-2">
+              {recs.map((r, i) => (
+                <div key={r.id ?? `wrec-${i}`} className="rounded-md border p-3">
+                  {r.title && <div className="text-sm font-medium">{renderTextLike(r.title)}</div>}
+                  {r.reason && (
+                    <div className="mt-1 text-xs text-muted-foreground">{renderTextLike(r.reason)}</div>
+                  )}
+                  {r.evidence && (
+                    <div className="mt-1 text-xs"><span className="font-medium">Evidence:</span> {renderTextLike(r.evidence)}</div>
+                  )}
+                  {r.expectedImpact && (
+                    <div className="mt-1 text-xs"><span className="font-medium">Impact:</span> {renderTextLike(r.expectedImpact)}</div>
+                  )}
+                  {typeof r.confidence === "number" && (
+                    <div className="mt-1 text-xs text-muted-foreground">Confidence: {Math.round(r.confidence * 100)}%</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+

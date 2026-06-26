@@ -44,10 +44,34 @@ export type BackendRecommendation = {
   status?: string;
 };
 
+export type WebsiteContext = {
+  fetchStatus?: string;
+  title?: string;
+  businessSummary?: string;
+  topics?: unknown[];
+  headings?: unknown[];
+  hasClearCta?: boolean;
+  warning?: string;
+};
+
+export type WebsiteRecommendation = {
+  id?: string;
+  title?: string;
+  reason?: string;
+  evidence?: string;
+  expectedImpact?: string;
+  confidence?: number;
+  [key: string]: unknown;
+};
+
 export type AnalyzeResponse = {
   summary?: BackendSummary;
-  executiveSummary?: string;
+  executiveSummary?:
+    | string
+    | { headline?: string; findings?: unknown[]; limitations?: unknown[] };
   recommendations?: BackendRecommendation[];
+  websiteContext?: WebsiteContext;
+  websiteRecommendations?: WebsiteRecommendation[];
 };
 
 export async function analyzeAccountApi(
