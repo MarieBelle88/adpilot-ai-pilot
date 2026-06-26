@@ -561,6 +561,29 @@ function AdPilotDashboard() {
           </header>
 
           <div className="space-y-6 p-4 sm:p-6">
+            {lastRequest && (
+              <Alert className="border-primary/40 bg-primary/5">
+                <Check className="h-4 w-4 text-primary" />
+                <AlertTitle>Analyze request sent · {lastRequest.at}</AlertTitle>
+                <AlertDescription>
+                  {lastRequest.datasetCount} enabled dataset{lastRequest.datasetCount === 1 ? "" : "s"} ·{" "}
+                  {lastRequest.totalRows.toLocaleString()} rows · goal{" "}
+                  <span className="font-medium">{lastRequest.objective}</span> ({lastRequest.primaryKpi}) ·
+                  action mode <span className="font-medium">{lastRequest.actionMode}</span>. Payload logged
+                  to the browser console.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Alert className="border-warning/40 bg-warning/10">
+              <Sparkles className="h-4 w-4 text-warning" />
+              <AlertTitle>Demo Results — real analysis is not connected yet.</AlertTitle>
+              <AlertDescription>
+                The metrics and recommendations below are fixed sample data. Uploaded CSVs are parsed and
+                logged but not yet scored.
+              </AlertDescription>
+            </Alert>
+
             {!summary.trackingHealthy && (
               <Alert className="border-warning/40 bg-warning/10 text-foreground">
                 <ShieldAlert className="h-4 w-4 text-warning" />
