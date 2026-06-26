@@ -816,7 +816,12 @@ function AdPilotDashboard() {
               </Alert>
             )}
 
-
+            {analysisResult && (analysisResult.websiteContext || (analysisResult.websiteRecommendations?.length ?? 0) > 0) && (
+              <WebsiteAnalysisCard
+                context={analysisResult.websiteContext}
+                recommendations={analysisResult.websiteRecommendations}
+              />
+            )}
 
 
             {!summary.trackingHealthy && (
