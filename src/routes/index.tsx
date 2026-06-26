@@ -270,13 +270,11 @@ function AdPilotDashboard() {
     return Math.min(100, Math.round((summary.roas / Number(targetKpi || 1)) * 100));
   }, [primaryKpi, targetKpi, summary]);
 
-  async function handleAnalyze() {
+  function handleAnalyze() {
     setAnalyzing(true);
     try {
       const payload = {
-        config: {
-          websiteUrl,
-          marketingNotes,
+        businessGoal: {
           objective,
           primaryKpi,
           targetKpi: Number(targetKpi),
@@ -284,10 +282,10 @@ function AdPilotDashboard() {
           budgetAmount: Number(budgetAmount),
           targetCountry,
           conversionType,
-          useDemoData,
-          googleExperimental,
+          websiteUrl,
+          marketingNotes,
         },
-        globalFilters: {
+        globalRules: {
           dateRange,
           matchType,
           minImpressions: Number(minImpressions),
@@ -296,8 +294,6 @@ function AdPilotDashboard() {
           minConversions: Number(minConversions),
           zeroConvOnly,
           minConfidence: minConfidence[0],
-        },
-        rules: {
           zeroConvSpend: Number(zeroConvSpend),
           highCpaPct: Number(highCpaPct),
           maxBidChange: Number(maxBidChange),
@@ -307,23 +303,21 @@ function AdPilotDashboard() {
         // Each dataset is sent separately — never combined.
         datasets: enabledDatasets.map((d) => ({
           id: d.id,
-          name: d.name,
           filename: d.filename,
-          detectedType: d.type,
-          columns: d.headers,
-          rawColumns: d.rawHeaders,
-          rowCount: d.rows.length,
-          activeFilters: d.filters,
+          datasetType: d.datasetType,
+          enabled: d.enabled,
+          columns: d.columns,
+          rowCount: d.rowCount,
           rows: d.rows,
+          filters: d.filters,
         })),
-        useDemoData: useDemoData && enabledDatasets.length === 0,
       };
-      const res = await analyzeAccount({ data: payload });
-      setSummary(res.summary);
-      setRecommendations(res.recommendations);
-      toast.success("Analysis complete", { description: `${res.recommendations.length} recommendations.` });
-    } catch (e) {
-      toast.error("Analysis failed", { description: e instanceof Error ? e.message : "Unknown error" });
+      // Backend not connected yet. Log payload for inspection.
+      // eslint-disable-next-line no-console
+      console.log("[AdPilot] Analyze payload", payload);
+      toast.success("Payload logged to console", {
+        description: `${payload.datasets.length} dataset${payload.datasets.length === 1 ? "" : "s"} ready for analysis.`,
+      });
     } finally {
       setAnalyzing(false);
     }
