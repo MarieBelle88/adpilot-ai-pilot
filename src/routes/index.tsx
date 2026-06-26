@@ -54,6 +54,7 @@ import {
   type Recommendation,
 } from "@/lib/adpilot-mock";
 import { cn } from "@/lib/utils";
+import { parseCampaignCsv, extractUnique, type CampaignRow } from "@/lib/csv-parse";
 
 export const Route = createFileRoute("/")({
   head: () => ({
