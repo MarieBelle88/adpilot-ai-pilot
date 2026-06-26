@@ -755,7 +755,7 @@ function DatasetCard({
             <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">Detected columns</div>
             <div className="flex flex-wrap gap-1">
               {dataset.columns.map((h) => (
-                <Badge key={h} variant="outline" className="text-[10px]">{h}</Badge>
+                <Badge key={h} variant="outline" className="text-[10px] text-sidebar-foreground border-sidebar-foreground/30">{h}</Badge>
               ))}
             </div>
           </div>
