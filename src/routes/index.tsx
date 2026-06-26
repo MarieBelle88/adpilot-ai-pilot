@@ -110,6 +110,14 @@ type MarketFilters = {
 };
 type DatasetFilters = KeywordFilters | AdGroupFilters | MarketFilters | Record<string, never>;
 
+type DatasetStats = {
+  totalRows: number;
+  usableRows: number;
+  problematicRows: number;
+  invalidDates: number;
+  missingByColumn: Record<string, number>;
+};
+
 type Dataset = {
   id: string;
   name: string;
@@ -121,6 +129,7 @@ type Dataset = {
   rowCount: number;
   rows: CampaignRow[];
   filters: DatasetFilters;
+  stats: DatasetStats;
 };
 
 function makeFiltersFor(type: DatasetType): DatasetFilters {
