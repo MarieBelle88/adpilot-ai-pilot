@@ -374,6 +374,31 @@ function AdPilotDashboard() {
   }, [analysisResult, useDemoData]);
 
 
+  const datasetTotals = useMemo(() => {
+    let clicks = 0;
+    let impressions = 0;
+    let hasImpressions = false;
+    let hasClicks = false;
+    for (const d of enabledDatasets) {
+      for (const row of d.rows as unknown as Record<string, unknown>[]) {
+        const imp = Number(row?.impressions);
+        const clk = Number(row?.clicks);
+        if (Number.isFinite(imp)) { impressions += imp; hasImpressions = true; }
+        if (Number.isFinite(clk)) { clicks += clk; hasClicks = true; }
+      }
+    }
+    return { clicks, impressions, hasImpressions, hasClicks };
+  }, [enabledDatasets]);
+
+  const ctrDisplay = useMemo(() => {
+    if (datasetTotals.hasImpressions && datasetTotals.impressions > 0) {
+      const v = (datasetTotals.clicks / datasetTotals.impressions) * 100;
+      return `${v.toFixed(2)}%`;
+    }
+    if (useDemoData && summary.ctr) return `${summary.ctr.toFixed(2)}%`;
+    return "—";
+  }, [datasetTotals, useDemoData, summary.ctr]);
+
   const filtered = useMemo(
     () => displayRecs.filter((r) => (r.confidence ?? 0) >= minConfidence[0]),
     [displayRecs, minConfidence],
