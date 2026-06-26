@@ -338,8 +338,17 @@ function AdPilotDashboard() {
       // Backend not connected yet. Log payload for inspection.
       // eslint-disable-next-line no-console
       console.log("[AdPilot] Analyze payload", payload);
+      const totalRows = payload.datasets.reduce((s, d) => s + d.rowCount, 0);
+      setLastRequest({
+        at: new Date().toLocaleString(),
+        datasetCount: payload.datasets.length,
+        totalRows,
+        objective,
+        primaryKpi,
+        actionMode,
+      });
       toast.success("Payload logged to console", {
-        description: `${payload.datasets.length} dataset${payload.datasets.length === 1 ? "" : "s"} ready for analysis.`,
+        description: `${payload.datasets.length} dataset${payload.datasets.length === 1 ? "" : "s"} · ${totalRows.toLocaleString()} rows`,
       });
     } finally {
       setAnalyzing(false);
