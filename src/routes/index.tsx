@@ -303,7 +303,13 @@ function AdPilotDashboard() {
   // ---------- Analysis result state ----------
   const [analysisResult, setAnalysisResult] = useState<{
     summary?: BackendSummary;
-    executiveSummary?: string;
+    executiveSummary?:
+      | string
+      | {
+          headline?: string;
+          findings?: unknown[];
+          limitations?: unknown[];
+        };
     recommendations: BackendRecommendation[];
   } | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
