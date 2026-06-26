@@ -4,6 +4,8 @@ import {
   analyzeAccountApi,
   type BackendRecommendation,
   type BackendSummary,
+  type WebsiteContext,
+  type WebsiteRecommendation,
 } from "@/lib/api";
 import {
   Activity,
