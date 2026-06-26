@@ -284,44 +284,14 @@ function AdPilotDashboard() {
     actionMode: string;
   } | null>(null);
 
-  // ---------- Live backend snapshot ----------
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [snapshotLoading, setSnapshotLoading] = useState(true);
-  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  // ---------- Analysis result state ----------
+  const [analysisResult, setAnalysisResult] = useState<{
+    summary?: BackendSummary;
+    executiveSummary?: string;
+    recommendations: BackendRecommendation[];
+  } | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-  async function loadSnapshot() {
-    setSnapshotLoading(true);
-    setSnapshotError(null);
-    try {
-      const data = await fetchSnapshot();
-      setSnapshot(data);
-    } catch (err) {
-      setSnapshotError(err instanceof Error ? err.message : "Failed to load snapshot");
-    } finally {
-      setSnapshotLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void loadSnapshot();
-  }, []);
-
-  const liveMetrics = useMemo(() => {
-    if (!snapshot) return null;
-    const kws = snapshot.keywords ?? [];
-    const clicks = kws.reduce((s, k) => s + (k.clicks || 0), 0);
-    const spend = kws.reduce((s, k) => s + (k.spend || 0), 0);
-    const conversions = kws.reduce((s, k) => s + (k.conversions || 0), 0);
-    const cpa = conversions > 0 ? spend / conversions : 0;
-    return {
-      campaigns: snapshot.campaigns?.length ?? 0,
-      keywords: kws.length,
-      clicks,
-      spend,
-      conversions,
-      cpa,
-    };
-  }, [snapshot]);
 
   const filtered = useMemo(
     () => recommendations.filter((r) => r.confidence >= minConfidence[0]),
