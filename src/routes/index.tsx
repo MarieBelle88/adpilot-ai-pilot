@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   analyzeAccountApi,
   type BackendRecommendation,
@@ -222,6 +222,9 @@ function renderTextLike(v: unknown): string {
 
 
 function AdPilotDashboard() {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => setIsMounted(true), []);
+
   // ---------- Config state ----------
   const [websiteUrl, setWebsiteUrl] = useState("https://www.pipedrive.com/");
   const [websiteUrlError, setWebsiteUrlError] = useState<string | null>(null);
@@ -897,42 +900,44 @@ function AdPilotDashboard() {
               <MetricCard label="Conversions" value={summary.conversions.toLocaleString()} sub={`CTR: ${ctrDisplay}`} />
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Spend &amp; estimated revenue (30 days)</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <ResponsiveContainer width="100%" height={160}>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="day" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={5} />
-                      <YAxis yAxisId="left" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={42} tickFormatter={(v) => `$${v as number}`} />
-                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={42} tickFormatter={(v) => `$${v as number}`} />
-                      <RechartsTooltip contentStyle={{ fontSize: 12 }} />
-                      <Line yAxisId="left" type="monotone" dataKey="spend" stroke="#8b5cf6" dot={false} strokeWidth={2} name="Spend ($)" />
-                      <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" dot={false} strokeWidth={2} name="Revenue ($)" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Daily conversions (30 days)</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <ResponsiveContainer width="100%" height={160}>
-                    <BarChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="day" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={5} />
-                      <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={30} />
-                      <RechartsTooltip contentStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="conversions" fill="#6366f1" radius={[2, 2, 0, 0]} name="Conversions" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </div>
+            {isMounted && (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Spend &amp; estimated revenue (30 days)</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <ResponsiveContainer width="100%" height={160}>
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="day" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={5} />
+                        <YAxis yAxisId="left" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={42} tickFormatter={(v) => `$${v}`} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={42} tickFormatter={(v) => `$${v}`} />
+                        <RechartsTooltip contentStyle={{ fontSize: 12 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="spend" stroke="#8b5cf6" dot={false} strokeWidth={2} name="Spend ($)" />
+                        <Line yAxisId="right" type="monotone" dataKey="revenue" stroke="#10b981" dot={false} strokeWidth={2} name="Revenue ($)" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Daily conversions (30 days)</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <ResponsiveContainer width="100%" height={160}>
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="day" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={5} />
+                        <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={30} />
+                        <RechartsTooltip contentStyle={{ fontSize: 12 }} />
+                        <Bar dataKey="conversions" fill="#6366f1" radius={[2, 2, 0, 0]} name="Conversions" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
             <div className="grid gap-4 lg:grid-cols-3">
               <Card>
