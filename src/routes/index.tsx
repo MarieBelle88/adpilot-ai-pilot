@@ -319,22 +319,38 @@ function AdPilotDashboard() {
         id: r.id ?? `rec-${i}`,
       }));
     }
+    if (!useDemoData) return [];
     return mockRecommendations.map(mockToBackendRec);
-  }, [analysisResult]);
+  }, [analysisResult, useDemoData]);
+
+  const emptySummary = {
+    spend: 0,
+    conversions: 0,
+    cpa: 0,
+    roas: 0,
+    impressions: 0,
+    clicks: 0,
+    ctr: 0,
+    wastedSpend: 0,
+    trackingHealthy: true,
+    trackingNote: "",
+  };
 
   const summary = useMemo(() => {
     const s = analysisResult?.summary;
-    if (!s) return mockSummary;
+    const base = useDemoData ? mockSummary : emptySummary;
+    if (!s) return base;
     return {
-      ...mockSummary,
-      spend: s.spend ?? mockSummary.spend,
-      clicks: s.clicks ?? mockSummary.clicks,
-      conversions: s.conversions ?? mockSummary.conversions,
-      cpa: s.cpa ?? mockSummary.cpa,
-      roas: s.roas ?? mockSummary.roas,
-      wastedSpend: s.wastedSpend ?? mockSummary.wastedSpend,
+      ...base,
+      spend: s.spend ?? base.spend,
+      clicks: s.clicks ?? base.clicks,
+      conversions: s.conversions ?? base.conversions,
+      cpa: s.cpa ?? base.cpa,
+      roas: s.roas ?? base.roas,
+      wastedSpend: s.wastedSpend ?? base.wastedSpend,
     };
-  }, [analysisResult]);
+  }, [analysisResult, useDemoData]);
+
 
   const filtered = useMemo(
     () => displayRecs.filter((r) => (r.confidence ?? 0) >= minConfidence[0]),
