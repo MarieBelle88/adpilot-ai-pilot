@@ -209,7 +209,9 @@ function AdPilotDashboard() {
           maxBudgetChange: Number(maxBudgetChange),
         },
         actionMode,
-        campaignsData: { source: dataSource, mock: true },
+        campaignsData: uploadedRows.length
+          ? { source: "upload", filename: uploadedFilename, rowCount: uploadedRows.length, rows: uploadedRows }
+          : { source: dataSource, mock: true },
       };
       const res = await analyzeAccount({ data: payload });
       setSummary(res.summary);
