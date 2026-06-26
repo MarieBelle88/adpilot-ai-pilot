@@ -384,9 +384,33 @@ function AdPilotDashboard() {
   }, [primaryKpi, targetKpi, summary]);
 
   async function runAnalyze() {
+    // Normalize + validate website URL
+    const trimmed = websiteUrl.trim();
+    let normalizedUrl = trimmed;
+    if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+      normalizedUrl = `https://${trimmed}`;
+    }
+    let urlValid = false;
+    try {
+      if (normalizedUrl) {
+        const u = new URL(normalizedUrl);
+        urlValid = !!u.hostname && u.hostname.includes(".");
+      }
+    } catch {
+      urlValid = false;
+    }
+    if (!urlValid) {
+      setWebsiteUrlError("Enter a valid website URL (e.g. example.com)");
+      toast.error("Invalid website URL");
+      return;
+    }
+    setWebsiteUrlError(null);
+
     setAnalyzing(true);
     setAnalysisError(null);
     const payload = {
+      websiteUrl: normalizedUrl,
+      marketingNotes: marketingNotes.trim(),
       businessGoal: {
         objective,
         primaryKpi,
@@ -395,8 +419,6 @@ function AdPilotDashboard() {
         budgetAmount: Number(budgetAmount),
         targetCountry,
         conversionType,
-        websiteUrl,
-        marketingNotes,
       },
       globalRules: {
         dateRange,
