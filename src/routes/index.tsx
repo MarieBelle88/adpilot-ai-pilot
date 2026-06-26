@@ -705,7 +705,7 @@ function AdPilotDashboard() {
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Filtered results</CardTitle></CardHeader>
                 <CardContent>
                   <div className="text-3xl font-semibold">{filtered.length}</div>
-                  <p className="mt-1 text-xs text-muted-foreground">of {recommendations.length} total · ≥ {Math.round(minConfidence[0] * 100)}% confidence</p>
+                  <p className="mt-1 text-xs text-muted-foreground">of {displayRecs.length} total · ≥ {Math.round(minConfidence[0] * 100)}% confidence</p>
                 </CardContent>
               </Card>
               <Card>
