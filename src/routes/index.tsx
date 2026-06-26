@@ -744,12 +744,13 @@ function AdPilotDashboard() {
                     {filtered.slice(0, 4).map((r) => (
                       <div key={r.id} className="flex items-start justify-between gap-3 border-b pb-3 last:border-0 last:pb-0">
                         <div className="min-w-0">
-                          <div className="text-sm font-medium">{r.action}</div>
-                          <div className="truncate text-xs text-muted-foreground">{r.target}</div>
+                          <div className="text-sm font-medium">{r.title ?? "Recommendation"}</div>
+                          <div className="truncate text-xs text-muted-foreground">{r.target ?? r.campaign ?? ""}</div>
                         </div>
-                        <Badge variant="outline" className="shrink-0">{Math.round(r.confidence * 100)}%</Badge>
+                        <Badge variant="outline" className="shrink-0">{Math.round((r.confidence ?? 0) * 100)}%</Badge>
                       </div>
                     ))}
+
                     {filtered.length === 0 && <EmptyState />}
                   </CardContent>
                 </Card>
