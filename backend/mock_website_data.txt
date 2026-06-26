@@ -1,0 +1,62 @@
+WEBSITE: Berlin Plumbing GmbH — https://berlin-plumbing.example.com
+
+== HOMEPAGE (/) ==
+
+HERO:
+Berlin's Trusted Emergency Plumbers — 24/7, Fixed Prices
+Get a free quote or call us now: +49 30 123 456 78
+
+We're local, fast, and fully certified. Our team covers all of Berlin and surrounding areas.
+
+CTA Buttons: [Get Free Quote] [Call Now]
+
+No hero mention of emergency landing page. Homepage CTA form asks for: Name, phone, postcode, problem description.
+
+== SERVICES ==
+- Emergency plumbing (burst pipes, leaks)
+- Drain unblocking
+- Boiler installation & repair
+- Bathroom renovation
+- New installations
+
+== USPs ==
+- 60-minute response time for emergencies
+- Fixed price — no surprises
+- Fully insured & certified (DVGW certified)
+- 5-year workmanship guarantee
+- Available 24/7 including weekends and public holidays
+
+== REVIEWS ==
+★★★★★ 4.9/5 based on 312 Google reviews
+"Fast, professional, and the price was exactly as quoted." — Hans M., Berlin Mitte
+"Arrived within the hour for a burst pipe at 2am. Legends." — Sarah K., Kreuzberg
+
+== PRICING PAGE (/pricing) ==
+Call-out fee: €0
+Emergency surcharge (nights/weekends): +€30
+Labour: from €75/hour
+Parts charged at cost + 15%
+All prices include 19% VAT
+
+Mobile LCP on /pricing: 5.4s (SLOW — Google Core Web Vitals fail)
+Desktop LCP on /pricing: 2.1s (PASS)
+
+== EMERGENCY LANDING PAGE (/emergency) ==
+Dedicated page for emergency call-outs.
+Headline: "Emergency Plumber in Berlin — We're There in 60 Minutes"
+Single-step form: phone number only.
+Mobile LCP: 2.0s, Desktop LCP: 1.8s
+Bounce rate: 38% (vs 68% on homepage)
+Conversion rate: 3.8% mobile, 4.1% desktop
+
+NOTE: Emergency plumbing campaigns (camp_01) send all traffic to homepage (/), NOT to /emergency despite /emergency having 4× better mobile conversion rate.
+
+== ABOUT ==
+Founded 2008. 14 plumbers, covering all 12 Berlin districts.
+Languages: German, English, Turkish.
+
+== CONTACT ==
+Address: Klosterstr. 42, 10179 Berlin
+Phone: +49 30 123 456 78
+Email: info@berlin-plumbing.example.com
+Hours: 24/7 for emergencies; office Mon-Fri 8am-6pm
