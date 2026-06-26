@@ -132,7 +132,7 @@ type Dataset = {
   stats: DatasetStats;
 };
 
-function makeFiltersFor(type: DatasetType): DatasetFilters {
+function makeFiltersFor(type: DatasetType, rows?: CampaignRow[]): DatasetFilters {
   if (type === "keyword")
     return {
       campaigns: [], keywords: [], devices: [], countries: [],
@@ -143,11 +143,16 @@ function makeFiltersFor(type: DatasetType): DatasetFilters {
       months: [], adGroups: [], devices: [],
       minCost: "", minRevenue: "", negativeProfitOnly: false,
     };
-  if (type === "market")
+  if (type === "market") {
+    // Default platform to "Google Ads" when present in the uploaded data.
+    const platforms = rows ? extractUnique(rows, "platform") : [];
+    const hasGoogle = platforms.find((p) => /google ads/i.test(p));
     return {
-      platforms: [], campaignTypes: [], countries: [], industries: [],
+      platforms: hasGoogle ? [hasGoogle] : [],
+      campaignTypes: [], countries: [], industries: [],
       minCpa: "", minRoas: "", dateRange: "Last 30 days",
     };
+  }
   return {};
 }
 
