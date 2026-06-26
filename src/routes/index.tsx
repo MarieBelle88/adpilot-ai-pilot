@@ -163,12 +163,38 @@ function makeFiltersFor(type: DatasetType, rows?: CampaignRow[]): DatasetFilters
 
 type RecTab = "summary" | "keywords" | "ad_groups" | "markets" | "risks";
 
-function bucketRec(rec: Recommendation): RecTab {
-  if (rec.tab === "risks") return "risks";
-  if (rec.targetType === "keyword" || rec.targetType === "search_term") return "keywords";
-  if (rec.targetType === "ad") return "ad_groups";
+function bucketRec(rec: BackendRecommendation): RecTab {
+  const cat = (rec.category ?? "").toLowerCase();
+  if (cat.includes("risk")) return "risks";
+  const t = (rec.datasetType ?? "").toLowerCase();
+  if (t.includes("keyword") || t.includes("search_term")) return "keywords";
+  if (t.includes("ad_group") || t.includes("ad ") || t === "ad") return "ad_groups";
   return "markets";
 }
+
+function mockToBackendRec(r: Recommendation): BackendRecommendation {
+  const dt =
+    r.targetType === "keyword" || r.targetType === "search_term"
+      ? "keyword"
+      : r.targetType === "ad"
+        ? "ad_group"
+        : "market";
+  return {
+    id: r.id,
+    title: r.action,
+    datasetType: dt,
+    category: r.tab === "risks" ? "risk" : "opportunity",
+    target: r.target,
+    campaign: "",
+    reason: r.evidence,
+    ruleTriggered: r.rule,
+    expectedImpact: r.impact,
+    confidence: r.confidence,
+    evidence: r.evidence,
+    status: "pending",
+  };
+}
+
 
 function AdPilotDashboard() {
   // ---------- Config state ----------
