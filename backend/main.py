@@ -278,6 +278,119 @@ def _campaign_name(campaigns: list, campaign_id: Optional[str]) -> str:
     return campaign_id or "Unknown"
 
 
+def analyze_website_context(website_text: str, ads_data: dict) -> list:
+    """Generate recommendations by comparing scraped website content against ads data."""
+    if not website_text or website_text.startswith("[Could not"):
+        return []
+
+    text_lower = website_text.lower()
+    recs = []
+    rec_id = 900  # offset to avoid collision with ads recs
+
+    # --- Extract existing ad keywords for comparison ---
+    kw_texts = {kw.get("text", "").lower() for kw in ads_data.get("keywords", [])}
+
+    # --- Service/topic signals from website ---
+    service_signals = {
+        "emergency": ["emergency", "24/7", "24 hours", "urgent", "same day", "same-day"],
+        "pricing": ["price", "pricing", "cost", "quote", "estimate", "affordable", "cheap", "rate"],
+        "reviews": ["review", "testimonial", "rated", "stars", "trust", "certified", "award"],
+        "location": ["near me", "local", "area", "city", "region", "district"],
+        "guarantee": ["guarantee", "warranty", "satisfaction", "money back", "no fix no fee"],
+        "phone": ["call us", "phone", "contact", "free consultation", "book now", "get a quote"],
+    }
+
+    found_signals = {k: any(s in text_lower for s in signals) for k, signals in service_signals.items()}
+
+    # --- Rec: emergency service not in ads ---
+    if found_signals["emergency"] and not any("emergency" in kw or "urgent" in kw or "24" in kw for kw in kw_texts):
+        recs.append({
+            "id": f"r{rec_id}", "tab": "opportunities",
+            "action": "Add emergency/24-7 keywords — your website offers it but ads don't target it",
+            "target": "Keyword expansion",
+            "targetType": "keyword",
+            "evidence": "Website mentions emergency/24-7 service but no keywords target these high-intent searches",
+            "rule": "Website-to-keyword coverage gap",
+            "impact": "Capture high-intent emergency searches (typically 3-5× higher CVR)",
+            "confidence": 0.87,
+        })
+        rec_id += 1
+
+    # --- Rec: pricing/quote CTA on site → add to ad copy ---
+    if found_signals["pricing"] and found_signals["phone"]:
+        recs.append({
+            "id": f"r{rec_id}", "tab": "ad_copy",
+            "action": "Add price/quote CTA to ad headlines — your landing page shows pricing info",
+            "target": "RSA headline suggestions",
+            "targetType": "ad",
+            "evidence": "Website features pricing/quote content — including this in headlines increases CTR by ~15% (Google benchmark)",
+            "rule": "Ad copy ↔ landing page alignment",
+            "impact": "+ ~0.5-1pp CTR uplift",
+            "confidence": 0.81,
+        })
+        rec_id += 1
+
+    # --- Rec: reviews/trust signals → add social proof to ads ---
+    if found_signals["reviews"]:
+        recs.append({
+            "id": f"r{rec_id}", "tab": "ad_copy",
+            "action": "Add Seller Ratings extension — website shows reviews/testimonials",
+            "target": "Ad extensions",
+            "targetType": "ad",
+            "evidence": "Website has review/testimonial content — Seller Ratings extensions add social proof directly in SERP and improve CTR",
+            "rule": "Trust signal gap",
+            "impact": "+ ~10% CTR from Seller Ratings (Google data)",
+            "confidence": 0.78,
+        })
+        rec_id += 1
+
+    # --- Rec: guarantee mentioned on site → use in ad copy ---
+    if found_signals["guarantee"]:
+        recs.append({
+            "id": f"r{rec_id}", "tab": "ad_copy",
+            "action": "Add guarantee/warranty to ad copy — your site offers it, ads don't mention it",
+            "target": "RSA descriptions",
+            "targetType": "ad",
+            "evidence": "Website mentions guarantee/warranty/satisfaction promise — this is a key differentiator to surface in ad descriptions",
+            "rule": "USP not reflected in ad copy",
+            "impact": "Improve Quality Score + CTR via stronger value proposition",
+            "confidence": 0.83,
+        })
+        rec_id += 1
+
+    # --- Rec: local signals → add location extensions ---
+    if found_signals["location"]:
+        recs.append({
+            "id": f"r{rec_id}", "tab": "opportunities",
+            "action": "Enable Location Extensions — website targets local area",
+            "target": "Campaign-level extensions",
+            "targetType": "campaign",
+            "evidence": "Website references local/area service — Location Extensions show your address in SERP and improve local visibility",
+            "rule": "Local presence gap",
+            "impact": "+ ~10-15% CTR for 'near me' searches",
+            "confidence": 0.75,
+        })
+        rec_id += 1
+
+    # --- Rec: extract page title for landing page check ---
+    title_line = next((l for l in website_text.splitlines() if l.startswith("TITLE:")), "")
+    site_title = title_line.replace("TITLE:", "").strip()
+    if site_title and len(site_title) > 5:
+        recs.append({
+            "id": f"r{rec_id}", "tab": "landing_pages",
+            "action": f"Align ad copy with landing page headline: '{site_title[:60]}'",
+            "target": "Message match",
+            "targetType": "landing_page",
+            "evidence": f"Landing page title is '{site_title[:80]}' — ad headlines should mirror this for better Quality Score and lower CPA",
+            "rule": "Message match (ad ↔ landing page)",
+            "impact": "Improve Quality Score → lower CPC by 10-20%",
+            "confidence": 0.80,
+        })
+        rec_id += 1
+
+    return recs
+
+
 class NewAnalyzeRequest(BaseModel):
     businessGoal: Dict[str, Any] = {}
     globalRules: Dict[str, Any] = {}
@@ -352,9 +465,22 @@ async def analyze_new(request: NewAnalyzeRequest):
     time.sleep(0.5)
     result = analyze_ads_data(ads_data, config, rule_cfg)
 
+    # Website-specific recommendations (only when we scraped something)
+    website_recs = analyze_website_context(website_context, ads_data) if website_context else []
+
+    all_recs = result["recommendations"] + website_recs
+
     total_rows = sum(len(ds.get("rows") or []) for ds in request.datasets)
+    scrape_ok = website_context and not website_context.startswith("[Could not")
     data_source = f"{total_rows} CSV rows" if has_csv else (
-        f"scraped {website_url}" if website_context and not website_context.startswith("[Could not") else "demo data"
+        f"scraped {website_url}" if scrape_ok else "demo data"
+    )
+
+    exec_summary = (
+        f"Data source: {data_source}. "
+        f"Found {len(all_recs)} recommendation(s)"
+        + (f" including {len(website_recs)} based on your website content" if website_recs else "")
+        + f". Estimated wasted spend: €{result['summary']['wastedSpend']:.0f}."
     )
 
     return {
@@ -363,12 +489,8 @@ async def analyze_new(request: NewAnalyzeRequest):
             "analyzedRows": total_rows or len(ads_data.get("keywords", [])),
             "enabledDatasets": len(request.datasets) or 1,
         },
-        "executiveSummary": (
-            f"Data source: {data_source}. "
-            f"Found {len(result['recommendations'])} recommendation(s). "
-            f"Estimated wasted spend: €{result['summary']['wastedSpend']:.0f}."
-        ),
-        "recommendations": recs_to_backend_format(result["recommendations"]),
+        "executiveSummary": exec_summary,
+        "recommendations": recs_to_backend_format(all_recs),
     }
 
 
