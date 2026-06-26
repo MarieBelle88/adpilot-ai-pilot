@@ -1207,9 +1207,9 @@ function RecCard({
           {(rec.reason || rec.evidence) && (
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Reason / evidence</div>
-              {rec.reason && <p className="mt-1 text-sm">{rec.reason}</p>}
+              {rec.reason && <p className="mt-1 text-sm">{renderTextLike(rec.reason)}</p>}
               {rec.evidence && rec.evidence !== rec.reason && (
-                <p className="mt-1 text-xs text-muted-foreground">{rec.evidence}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{renderTextLike(rec.evidence)}</p>
               )}
             </div>
           )}
