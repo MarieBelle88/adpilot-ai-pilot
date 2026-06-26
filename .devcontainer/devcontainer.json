@@ -11,10 +11,7 @@
     "3000": { "label": "Frontend (Vite)", "onAutoForward": "openPreview" },
     "8000": { "label": "Backend (FastAPI)", "onAutoForward": "silent" }
   },
-  "postCreateCommand": "pip install -r backend/requirements.txt && npm install -g bun && cd adpilot-ai-pilot && bun install",
-  "remoteEnv": {
-    "VITE_BACKEND_URL": "http://localhost:8000"
-  },
+  "postCreateCommand": "git submodule update --init --recursive && pip install -r backend/requirements.txt && cd adpilot-ai-pilot && npm install",
   "customizations": {
     "vscode": {
       "extensions": [

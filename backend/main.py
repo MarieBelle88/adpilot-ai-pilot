@@ -1,11 +1,13 @@
 import json
 import time
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+import requests as http_requests
+from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Any, Dict, List, Optional
 
 app = FastAPI(title="AdPilot AI Backend")
 
@@ -18,6 +20,34 @@ app.add_middleware(
 )
 
 BASE_DIR = Path(__file__).parent
+
+
+def scrape_website(url: str) -> str:
+    """Fetch a URL and return cleaned text content (title, headings, body)."""
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; AdPilotBot/1.0; +https://adpilot.ai)"}
+        resp = http_requests.get(url, headers=headers, timeout=8)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "head"]):
+            tag.decompose()
+        title = soup.title.string.strip() if soup.title else ""
+        meta = soup.find("meta", attrs={"name": "description"})
+        meta_desc = meta.get("content", "").strip() if meta else ""
+        headings = [h.get_text(strip=True) for h in soup.find_all(["h1", "h2", "h3"])[:12]]
+        lines = [l.strip() for l in soup.get_text(separator="\n").splitlines() if l.strip()]
+        body = "\n".join(lines)[:2500]
+        parts = [f"URL: {url}"]
+        if title:
+            parts.append(f"TITLE: {title}")
+        if meta_desc:
+            parts.append(f"META DESCRIPTION: {meta_desc}")
+        if headings:
+            parts.append("HEADINGS: " + " | ".join(headings))
+        parts.append(f"\nBODY:\n{body}")
+        return "\n".join(parts)
+    except Exception as exc:
+        return f"[Could not scrape {url}: {exc}]"
 
 
 class AnalyzeRequest(BaseModel):
@@ -248,6 +278,100 @@ def _campaign_name(campaigns: list, campaign_id: Optional[str]) -> str:
     return campaign_id or "Unknown"
 
 
+class NewAnalyzeRequest(BaseModel):
+    businessGoal: Dict[str, Any] = {}
+    globalRules: Dict[str, Any] = {}
+    actionMode: str = "approval"
+    datasets: List[Dict[str, Any]] = []
+
+
+def recs_to_backend_format(recs: list) -> list:
+    """Convert internal rec dicts to the BackendRecommendation shape the frontend expects."""
+    out = []
+    for r in recs:
+        out.append({
+            "id": r.get("id"),
+            "title": r.get("action"),
+            "datasetType": r.get("targetType", "keyword"),
+            "category": "risk" if r.get("tab") == "risks" else "opportunity",
+            "target": r.get("target"),
+            "campaign": "",
+            "reason": r.get("evidence"),
+            "ruleTriggered": r.get("rule"),
+            "expectedImpact": r.get("impact"),
+            "confidence": r.get("confidence"),
+            "evidence": r.get("evidence"),
+            "status": "pending",
+        })
+    return out
+
+
+@app.post("/analyze")
+async def analyze_new(request: NewAnalyzeRequest):
+    """New-style endpoint matching the frontend's api.ts AnalyzeRequest shape."""
+    goal = request.businessGoal
+    rules = request.globalRules
+    website_url = str(goal.get("websiteUrl") or "").strip()
+
+    # Collect all CSV rows from enabled datasets
+    all_rows = [
+        row
+        for ds in request.datasets
+        if ds.get("enabled", True) and ds.get("rows")
+        for row in ds["rows"]
+    ]
+
+    has_csv = bool(all_rows)
+
+    if has_csv:
+        ads_data = build_ads_data_from_csv(all_rows)
+        website_context = ""          # user supplied their own data — skip scraping
+    else:
+        ads_path = BASE_DIR / "mock_google_ads.json"
+        with open(ads_path) as f:
+            ads_data = json.load(f)
+        # Scrape the website URL when no CSV is provided
+        if website_url and website_url.startswith("http"):
+            website_context = scrape_website(website_url)
+        else:
+            website_context = ""
+
+    config = {
+        "targetKpi": goal.get("targetKpi", 120),
+        "objective": goal.get("objective", "leads"),
+        "primaryKpi": goal.get("primaryKpi", "CPA"),
+        "websiteContext": website_context,
+    }
+    rule_cfg = {
+        "zeroConvSpend": rules.get("zeroConvSpend", 400),
+        "highCpaPct": rules.get("highCpaPct", 150),
+        "maxBidChange": rules.get("maxBidChange", 25),
+        "maxBudgetChange": rules.get("maxBudgetChange", 20),
+    }
+
+    time.sleep(0.5)
+    result = analyze_ads_data(ads_data, config, rule_cfg)
+
+    total_rows = sum(len(ds.get("rows") or []) for ds in request.datasets)
+    data_source = f"{total_rows} CSV rows" if has_csv else (
+        f"scraped {website_url}" if website_context and not website_context.startswith("[Could not") else "demo data"
+    )
+
+    return {
+        "summary": {
+            **result["summary"],
+            "analyzedRows": total_rows or len(ads_data.get("keywords", [])),
+            "enabledDatasets": len(request.datasets) or 1,
+        },
+        "executiveSummary": (
+            f"Data source: {data_source}. "
+            f"Found {len(result['recommendations'])} recommendation(s). "
+            f"Estimated wasted spend: €{result['summary']['wastedSpend']:.0f}."
+        ),
+        "recommendations": recs_to_backend_format(result["recommendations"]),
+    }
+
+
 @app.get("/")
 def root():
     return {"status": "ok", "service": "AdPilot AI Backend"}
@@ -258,15 +382,83 @@ def health():
     return {"status": "healthy"}
 
 
+def build_ads_data_from_csv(rows: list) -> dict:
+    """Aggregate flat CSV rows into the same shape as mock_google_ads.json."""
+    from collections import defaultdict
+
+    campaigns: dict = {}
+    keywords: dict = {}
+
+    for row in rows:
+        camp_name = str(row.get("campaign") or "Unknown Campaign")
+        kw_text = str(row.get("keyword") or row.get("ad_group") or "unknown")
+
+        # Aggregate campaign totals
+        if camp_name not in campaigns:
+            campaigns[camp_name] = {
+                "id": f"camp_{len(campaigns)+1:02d}",
+                "name": camp_name,
+                "status": "ENABLED",
+                "dailyBudget": 50.0,
+                "spend": 0.0, "impressions": 0, "clicks": 0,
+                "conversions": 0, "type": "SEARCH",
+            }
+        c = campaigns[camp_name]
+        c["spend"] += float(row.get("spend") or row.get("cost") or 0)
+        c["impressions"] += int(row.get("impressions") or 0)
+        c["clicks"] += int(row.get("clicks") or 0)
+        c["conversions"] += int(row.get("conversions") or row.get("leads") or 0)
+
+        # Aggregate keyword totals (keyed by campaign+keyword)
+        kw_key = f"{camp_name}::{kw_text}"
+        if kw_key not in keywords:
+            keywords[kw_key] = {
+                "id": f"kw_{len(keywords)+1:03d}",
+                "campaignId": campaigns[camp_name]["id"],
+                "text": kw_text,
+                "matchType": str(row.get("match_type") or "BROAD"),
+                "clicks": 0, "impressions": 0, "spend": 0.0,
+                "conversions": 0, "qualityScore": 6, "status": "ENABLED",
+                "bidAmount": 0.50,
+            }
+        k = keywords[kw_key]
+        k["spend"] += float(row.get("spend") or row.get("cost") or 0)
+        k["impressions"] += int(row.get("impressions") or 0)
+        k["clicks"] += int(row.get("clicks") or 0)
+        k["conversions"] += int(row.get("conversions") or row.get("leads") or 0)
+
+    # Compute derived metrics
+    camp_list = list(campaigns.values())
+    for c in camp_list:
+        c["cpa"] = round(c["spend"] / c["conversions"], 2) if c["conversions"] else None
+        c["roas"] = round((c["conversions"] * 150) / c["spend"], 2) if c["spend"] else 0
+
+    kw_list = list(keywords.values())
+    for k in kw_list:
+        k["cpa"] = round(k["spend"] / k["conversions"], 2) if k["conversions"] else None
+        k["avgCpc"] = round(k["spend"] / k["clicks"], 2) if k["clicks"] else 0
+
+    return {
+        "account": {"name": "Uploaded Account", "currency": "USD", "dateRange": "CSV data"},
+        "campaigns": camp_list,
+        "keywords": kw_list,
+        "searchTerms": [],
+        "ads": [],
+        "landingPages": [],
+    }
+
+
 @app.post("/api/analyze")
 async def analyze(request: AnalyzeRequest):
-    ads_path = BASE_DIR / "mock_google_ads.json"
-    with open(ads_path) as f:
-        ads_data = json.load(f)
+    csv_data = request.campaignsData
+    if csv_data.get("source") == "upload" and csv_data.get("rows"):
+        ads_data = build_ads_data_from_csv(csv_data["rows"])
+    else:
+        ads_path = BASE_DIR / "mock_google_ads.json"
+        with open(ads_path) as f:
+            ads_data = json.load(f)
 
-    # Simulate a brief thinking delay
     time.sleep(0.8)
-
     result = analyze_ads_data(ads_data, request.config, request.rules)
     return result
 
