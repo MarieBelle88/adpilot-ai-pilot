@@ -195,6 +195,17 @@ function mockToBackendRec(r: Recommendation): BackendRecommendation {
   };
 }
 
+function renderTextLike(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
 
 function AdPilotDashboard() {
   // ---------- Config state ----------
@@ -303,7 +314,13 @@ function AdPilotDashboard() {
   // ---------- Analysis result state ----------
   const [analysisResult, setAnalysisResult] = useState<{
     summary?: BackendSummary;
-    executiveSummary?: string;
+    executiveSummary?:
+      | string
+      | {
+          headline?: string;
+          findings?: unknown[];
+          limitations?: unknown[];
+        };
     recommendations: BackendRecommendation[];
   } | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -679,7 +696,38 @@ function AdPilotDashboard() {
                 <AlertTitle>Analysis generated from uploaded campaign data.</AlertTitle>
                 {analysisResult.executiveSummary && (
                   <AlertDescription className="mt-1 whitespace-pre-wrap text-sm">
-                    {analysisResult.executiveSummary}
+                    {typeof analysisResult.executiveSummary === "string" ? (
+                      <p>{analysisResult.executiveSummary}</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {analysisResult.executiveSummary.headline && (
+                          <p className="font-medium">
+                            {String(analysisResult.executiveSummary.headline)}
+                          </p>
+                        )}
+                        {Array.isArray(analysisResult.executiveSummary.findings) &&
+                          analysisResult.executiveSummary.findings.length > 0 && (
+                            <ul className="list-disc pl-5 space-y-0.5">
+                              {analysisResult.executiveSummary.findings.map((f, i) => (
+                                <li key={`finding-${i}`}>{String(f)}</li>
+                              ))}
+                            </ul>
+                          )}
+                        {Array.isArray(analysisResult.executiveSummary.limitations) &&
+                          analysisResult.executiveSummary.limitations.length > 0 && (
+                            <div>
+                              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                                Limitations
+                              </div>
+                              <ul className="list-disc pl-5 space-y-0.5">
+                                {analysisResult.executiveSummary.limitations.map((l, i) => (
+                                  <li key={`limitation-${i}`}>{String(l)}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                      </div>
+                    )}
                   </AlertDescription>
                 )}
               </Alert>
@@ -1170,9 +1218,9 @@ function RecCard({
           {(rec.reason || rec.evidence) && (
             <div>
               <div className="text-xs uppercase tracking-wide text-muted-foreground">Reason / evidence</div>
-              {rec.reason && <p className="mt-1 text-sm">{rec.reason}</p>}
+              {rec.reason && <p className="mt-1 text-sm">{renderTextLike(rec.reason)}</p>}
               {rec.evidence && rec.evidence !== rec.reason && (
-                <p className="mt-1 text-xs text-muted-foreground">{rec.evidence}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{renderTextLike(rec.evidence)}</p>
               )}
             </div>
           )}
