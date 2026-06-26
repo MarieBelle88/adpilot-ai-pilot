@@ -627,14 +627,14 @@ function DatasetCard({
 }) {
   const [open, setOpen] = useState(false);
   const f = dataset.filters;
-  const filterGroups: Array<{ label: string; key: keyof Dataset["filters"]; opts: string[] }> = [
+  const filterGroups = ([
     { label: "Campaigns", key: "campaigns", opts: f.campaigns },
     { label: "Ad groups", key: "adGroups", opts: f.adGroups },
     { label: "Devices", key: "devices", opts: f.devices },
     { label: "Countries", key: "countries", opts: f.countries },
     { label: "Platforms", key: "platforms", opts: f.platforms },
     { label: "Industries", key: "industries", opts: f.industries },
-  ].filter((g) => g.opts.length > 0);
+  ] as const).filter((g) => g.opts.length > 0);
 
   return (
     <div className={cn("rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2", !dataset.enabled && "opacity-60")}>
