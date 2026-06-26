@@ -10,6 +10,7 @@ import {
   FileText,
   Filter,
   History,
+  Layers,
   Lightbulb,
   Loader2,
   PencilLine,
@@ -18,6 +19,7 @@ import {
   ShieldAlert,
   Sparkles,
   Target,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -47,14 +49,19 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import { analyzeAccount } from "@/lib/analyze.functions";
 import {
-  mockCampaigns,
   mockCountries,
   mockRecommendations,
   mockSummary,
   type Recommendation,
 } from "@/lib/adpilot-mock";
 import { cn } from "@/lib/utils";
-import { parseCampaignCsv, extractUnique, type CampaignRow } from "@/lib/csv-parse";
+import {
+  parseCampaignCsv,
+  extractUnique,
+  type CampaignRow,
+  type DatasetType,
+  DATASET_LABELS,
+} from "@/lib/csv-parse";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -74,9 +81,47 @@ export const Route = createFileRoute("/")({
 
 type ActionStatus = "pending" | "approved" | "rejected";
 
+type Dataset = {
+  id: string;
+  name: string;
+  filename: string;
+  rows: CampaignRow[];
+  headers: string[];
+  rawHeaders: string[];
+  type: DatasetType;
+  enabled: boolean;
+  filters: {
+    campaigns: string[];
+    devices: string[];
+    countries: string[];
+    platforms: string[];
+    industries: string[];
+    adGroups: string[];
+  };
+};
+
+function makeDatasetFilters(rows: CampaignRow[]): Dataset["filters"] {
+  return {
+    campaigns: extractUnique(rows, "campaign"),
+    devices: extractUnique(rows, "device"),
+    countries: extractUnique(rows, "country"),
+    platforms: extractUnique(rows, "platform"),
+    industries: extractUnique(rows, "industry"),
+    adGroups: extractUnique(rows, "ad_group"),
+  };
+}
+
+type RecTab = "summary" | "keywords" | "ad_groups" | "markets" | "risks";
+
+function bucketRec(rec: Recommendation): RecTab {
+  if (rec.tab === "risks") return "risks";
+  if (rec.targetType === "keyword" || rec.targetType === "search_term") return "keywords";
+  if (rec.targetType === "ad") return "ad_groups";
+  return "markets";
+}
+
 function AdPilotDashboard() {
   // ---------- Config state ----------
-  const [dataSource, setDataSource] = useState<"upload" | "demo" | "google">("demo");
   const [websiteUrl, setWebsiteUrl] = useState("https://acme.example");
   const [marketingNotes, setMarketingNotes] = useState(
     "We sell B2B CRM software, ICP is 50–500 employee SaaS companies in NA.",
@@ -91,9 +136,6 @@ function AdPilotDashboard() {
   const [conversionType, setConversionType] = useState("Form submission");
 
   const [dateRange, setDateRange] = useState("Last 30 days");
-  const [campaigns, setCampaigns] = useState<string[]>(mockCampaigns);
-  const [devices, setDevices] = useState<string[]>(["Desktop", "Mobile", "Tablet"]);
-  const [country, setCountry] = useState("United States");
   const [matchType, setMatchType] = useState("All");
   const [minImpressions, setMinImpressions] = useState("500");
   const [minClicks, setMinClicks] = useState("50");
@@ -108,46 +150,62 @@ function AdPilotDashboard() {
   const [maxBudgetChange, setMaxBudgetChange] = useState("20");
 
   const [actionMode, setActionMode] = useState<"insights" | "approval" | "automatic">("approval");
+  const [useDemoData, setUseDemoData] = useState(true);
+  const [googleExperimental, setGoogleExperimental] = useState(false);
 
-  // ---------- CSV upload state ----------
+  // ---------- Multi-CSV state ----------
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [uploadedRows, setUploadedRows] = useState<CampaignRow[]>([]);
-  const [uploadedFilename, setUploadedFilename] = useState<string | null>(null);
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const csvCampaigns = useMemo(
-    () => (uploadedRows.length ? extractUnique(uploadedRows, "campaign") : mockCampaigns),
-    [uploadedRows],
-  );
-  const csvDevices = useMemo(
-    () => (uploadedRows.length ? extractUnique(uploadedRows, "device") : ["Desktop", "Mobile", "Tablet"]),
-    [uploadedRows],
-  );
-  const csvCountries = useMemo(
-    () => (uploadedRows.length ? extractUnique(uploadedRows, "country") : mockCountries),
-    [uploadedRows],
-  );
+  const enabledDatasets = useMemo(() => datasets.filter((d) => d.enabled), [datasets]);
 
-  async function handleCsvFile(file: File) {
+  async function handleCsvFiles(files: FileList) {
     setUploadError(null);
-    try {
-      const text = await file.text();
-      const rows = parseCampaignCsv(text);
-      if (!rows.length) throw new Error("No data rows found.");
-      setUploadedRows(rows);
-      setUploadedFilename(file.name);
-      setDataSource("upload");
-      setCampaigns(extractUnique(rows, "campaign"));
-      const devs = extractUnique(rows, "device");
-      if (devs.length) setDevices(devs);
-      const countries = extractUnique(rows, "country");
-      if (countries.length && !countries.includes(country)) setCountry(countries[0]);
-      toast.success("CSV loaded", { description: `${file.name} · ${rows.length} rows` });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to parse CSV";
-      setUploadError(msg);
-      toast.error("CSV upload failed", { description: msg });
+    const next: Dataset[] = [];
+    for (const file of Array.from(files)) {
+      try {
+        const text = await file.text();
+        const parsed = parseCampaignCsv(text);
+        if (!parsed.rows.length) throw new Error(`${file.name}: no data rows.`);
+        next.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: file.name.replace(/\.csv$/i, ""),
+          filename: file.name,
+          rows: parsed.rows,
+          headers: parsed.headers,
+          rawHeaders: parsed.rawHeaders,
+          type: parsed.detectedType,
+          enabled: true,
+          filters: makeDatasetFilters(parsed.rows),
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Failed to parse CSV";
+        setUploadError(msg);
+        toast.error("CSV upload failed", { description: msg });
+      }
     }
+    if (next.length) {
+      setDatasets((prev) => [...prev, ...next]);
+      setUseDemoData(false);
+      toast.success(`${next.length} file${next.length > 1 ? "s" : ""} loaded`);
+    }
+  }
+
+  function updateDataset(id: string, patch: Partial<Dataset>) {
+    setDatasets((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  }
+  function removeDataset(id: string) {
+    setDatasets((ds) => ds.filter((d) => d.id !== id));
+  }
+  function updateDatasetFilter<K extends keyof Dataset["filters"]>(
+    id: string,
+    key: K,
+    value: Dataset["filters"][K],
+  ) {
+    setDatasets((ds) =>
+      ds.map((d) => (d.id === id ? { ...d, filters: { ...d.filters, [key]: value } } : d)),
+    );
   }
 
   // ---------- Results state ----------
@@ -178,7 +236,6 @@ function AdPilotDashboard() {
     try {
       const payload = {
         config: {
-          dataSource,
           websiteUrl,
           marketingNotes,
           objective,
@@ -188,12 +245,11 @@ function AdPilotDashboard() {
           budgetAmount: Number(budgetAmount),
           targetCountry,
           conversionType,
+          useDemoData,
+          googleExperimental,
         },
-        filters: {
+        globalFilters: {
           dateRange,
-          campaigns,
-          devices,
-          country,
           matchType,
           minImpressions: Number(minImpressions),
           minClicks: Number(minClicks),
@@ -209,9 +265,19 @@ function AdPilotDashboard() {
           maxBudgetChange: Number(maxBudgetChange),
         },
         actionMode,
-        campaignsData: uploadedRows.length
-          ? { source: "upload", filename: uploadedFilename, rowCount: uploadedRows.length, rows: uploadedRows }
-          : { source: dataSource, mock: true },
+        // Each dataset is sent separately — never combined.
+        datasets: enabledDatasets.map((d) => ({
+          id: d.id,
+          name: d.name,
+          filename: d.filename,
+          detectedType: d.type,
+          columns: d.headers,
+          rawColumns: d.rawHeaders,
+          rowCount: d.rows.length,
+          activeFilters: d.filters,
+          rows: d.rows,
+        })),
+        useDemoData: useDemoData && enabledDatasets.length === 0,
       };
       const res = await analyzeAccount({ data: payload });
       setSummary(res.summary);
@@ -235,12 +301,21 @@ function AdPilotDashboard() {
     }
   }
 
+  const sourceLabel =
+    enabledDatasets.length > 0
+      ? `${enabledDatasets.length} CSV${enabledDatasets.length > 1 ? "s" : ""}`
+      : useDemoData
+        ? "Demo data"
+        : googleExperimental
+          ? "Google Ads (experimental)"
+          : "No data source";
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Toaster richColors position="top-right" />
       <div className="flex">
         {/* SIDEBAR */}
-        <aside className="hidden w-[340px] shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:block">
+        <aside className="hidden w-[360px] shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:block">
           <div className="sticky top-0 max-h-screen overflow-y-auto">
             <div className="flex items-center gap-2 px-5 py-5">
               <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground">
@@ -254,53 +329,55 @@ function AdPilotDashboard() {
             <Separator className="bg-sidebar-border" />
             <div className="space-y-1 p-3">
               <Section title="Data source" icon={<Database className="h-4 w-4" />} defaultOpen>
-                <RadioGroup value={dataSource} onValueChange={(v) => setDataSource(v as typeof dataSource)} className="space-y-2">
-                  <RadioRow value="upload" id="ds-upload" label={<><Upload className="mr-1 inline h-3.5 w-3.5" /> Upload CSV</>} />
-                  <RadioRow value="demo" id="ds-demo" label="Use demo data" />
-                  <div className="flex items-center justify-between rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
-                    <div className="flex items-center gap-2">
-                      <RadioGroupItem value="google" id="ds-google" />
-                      <Label htmlFor="ds-google" className="text-sm">Connect Google Ads</Label>
-                    </div>
-                    <Badge variant="outline" className="border-warning/50 text-warning">Experimental</Badge>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.length) void handleCsvFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="w-full"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="mr-1 h-3.5 w-3.5" />
+                  Upload CSV files
+                </Button>
+                {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+
+                <div className="flex items-center justify-between rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
+                  <Label htmlFor="demo" className="text-sm">Use demo data</Label>
+                  <Switch id="demo" checked={useDemoData} onCheckedChange={setUseDemoData} />
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
+                  <div className="flex items-center gap-2">
+                    <Switch id="google" checked={googleExperimental} onCheckedChange={setGoogleExperimental} />
+                    <Label htmlFor="google" className="text-sm">Connect Google Ads</Label>
                   </div>
-                </RadioGroup>
-                {dataSource === "upload" && (
-                  <div className="space-y-2 rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".csv,text/csv"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void handleCsvFile(f);
-                        e.target.value = "";
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="w-full"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <Upload className="mr-1 h-3.5 w-3.5" />
-                      {uploadedFilename ? "Replace CSV" : "Choose CSV file"}
-                    </Button>
-                    {uploadedFilename ? (
-                      <div className="text-xs text-sidebar-foreground/70">
-                        <div className="truncate font-medium text-sidebar-foreground">{uploadedFilename}</div>
-                        <div>{uploadedRows.length.toLocaleString()} rows · {csvCampaigns.length} campaigns · {csvDevices.length} devices · {csvCountries.length} locations</div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-sidebar-foreground/60">
-                        Accepts columns: date, campaign, keyword, country, device, impressions, clicks, cost, conversions, conversion_value.
-                      </p>
-                    )}
-                    {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+                  <Badge variant="outline" className="border-warning/50 text-warning">Experimental</Badge>
+                </div>
+
+                {datasets.length > 0 && (
+                  <div className="space-y-2">
+                    {datasets.map((d) => (
+                      <DatasetCard
+                        key={d.id}
+                        dataset={d}
+                        onChange={(patch) => updateDataset(d.id, patch)}
+                        onRemove={() => removeDataset(d.id)}
+                        onFilterChange={(k, v) => updateDatasetFilter(d.id, k, v)}
+                      />
+                    ))}
                   </div>
                 )}
+
                 <FieldLabel>Website URL</FieldLabel>
                 <Input value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://" className="bg-sidebar-accent/40" />
                 <FieldLabel>Marketing notes</FieldLabel>
@@ -346,23 +423,12 @@ function AdPilotDashboard() {
                 <Input value={conversionType} onChange={(e) => setConversionType(e.target.value)} className="bg-sidebar-accent/40" />
               </Section>
 
-              <Section title="Analysis filters" icon={<Filter className="h-4 w-4" />}>
+              <Section title="Global filters" icon={<Filter className="h-4 w-4" />}>
                 <FieldLabel>Date range</FieldLabel>
                 <Select value={dateRange} onValueChange={setDateRange}>
                   <SelectTrigger className="bg-sidebar-accent/40"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["Last 7 days", "Last 30 days", "Last 90 days", "This quarter"].map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <FieldLabel>Campaigns</FieldLabel>
-                <MultiCheckList options={csvCampaigns} value={campaigns} onChange={setCampaigns} />
-                <FieldLabel>Devices</FieldLabel>
-                <MultiCheckList options={csvDevices} value={devices} onChange={setDevices} />
-                <FieldLabel>Country</FieldLabel>
-                <Select value={country} onValueChange={setCountry}>
-                  <SelectTrigger className="bg-sidebar-accent/40"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {csvCountries.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <FieldLabel>Match type</FieldLabel>
@@ -420,7 +486,7 @@ function AdPilotDashboard() {
             <div className="min-w-0">
               <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">Account analysis</h1>
               <p className="truncate text-sm text-muted-foreground">
-                {dataSource === "demo" ? "Demo account" : dataSource === "upload" ? "CSV upload" : "Google Ads"} · {dateRange} · {country}
+                {sourceLabel} · {dateRange}
               </p>
             </div>
             <Button size="lg" onClick={handleAnalyze} disabled={analyzing} className="shrink-0">
@@ -438,7 +504,6 @@ function AdPilotDashboard() {
               </Alert>
             )}
 
-            {/* SUMMARY CARDS */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
               <Stat label="Spend" value={`$${summary.spend.toLocaleString()}`} />
               <Stat label="Conversions" value={summary.conversions.toString()} />
@@ -475,27 +540,48 @@ function AdPilotDashboard() {
               </Card>
             </div>
 
-            {/* TABS */}
-            <Tabs defaultValue="opportunities" className="w-full">
+            <Tabs defaultValue="summary" className="w-full">
               <TabsList className="flex w-full flex-wrap justify-start gap-1">
-                <TabsTrigger value="opportunities"><Lightbulb className="mr-1 h-3.5 w-3.5" />Opportunities</TabsTrigger>
+                <TabsTrigger value="summary"><Sparkles className="mr-1 h-3.5 w-3.5" />Executive summary</TabsTrigger>
+                <TabsTrigger value="keywords"><Lightbulb className="mr-1 h-3.5 w-3.5" />Keywords</TabsTrigger>
+                <TabsTrigger value="ad_groups"><Layers className="mr-1 h-3.5 w-3.5" />Ad groups</TabsTrigger>
+                <TabsTrigger value="markets"><BarChart3 className="mr-1 h-3.5 w-3.5" />Markets</TabsTrigger>
                 <TabsTrigger value="risks"><AlertTriangle className="mr-1 h-3.5 w-3.5" />Risks</TabsTrigger>
-                <TabsTrigger value="ad_copy"><PencilLine className="mr-1 h-3.5 w-3.5" />New ad copy</TabsTrigger>
-                <TabsTrigger value="landing_pages"><FileText className="mr-1 h-3.5 w-3.5" />Landing pages</TabsTrigger>
                 <TabsTrigger value="history"><History className="mr-1 h-3.5 w-3.5" />Action history</TabsTrigger>
               </TabsList>
 
-              {(["opportunities", "risks", "ad_copy", "landing_pages"] as const).map((tab) => (
-                <TabsContent key={tab} value={tab} className="mt-4 space-y-3">
-                  {filtered.filter((r) => r.tab === tab).length === 0 ? (
-                    <EmptyState />
-                  ) : (
-                    filtered.filter((r) => r.tab === tab).map((r) => (
-                      <RecCard key={r.id} rec={r} status={status[r.id]} onDecide={decide} />
-                    ))
-                  )}
-                </TabsContent>
-              ))}
+              <TabsContent value="summary" className="mt-4 space-y-3">
+                <Card>
+                  <CardHeader><CardTitle className="text-base">Top recommendations across all datasets</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    {filtered.slice(0, 4).map((r) => (
+                      <div key={r.id} className="flex items-start justify-between gap-3 border-b pb-3 last:border-0 last:pb-0">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium">{r.action}</div>
+                          <div className="truncate text-xs text-muted-foreground">{r.target}</div>
+                        </div>
+                        <Badge variant="outline" className="shrink-0">{Math.round(r.confidence * 100)}%</Badge>
+                      </div>
+                    ))}
+                    {filtered.length === 0 && <EmptyState />}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {(["keywords", "ad_groups", "markets", "risks"] as const).map((tab) => {
+                const recs = filtered.filter((r) => bucketRec(r) === tab);
+                return (
+                  <TabsContent key={tab} value={tab} className="mt-4 space-y-3">
+                    {recs.length === 0 ? (
+                      <EmptyState />
+                    ) : (
+                      recs.map((r) => (
+                        <RecCard key={r.id} rec={r} status={status[r.id]} onDecide={decide} />
+                      ))
+                    )}
+                  </TabsContent>
+                );
+              })}
 
               <TabsContent value="history" className="mt-4">
                 {history.length === 0 ? (
@@ -528,6 +614,83 @@ function AdPilotDashboard() {
 
 // ---------------- helpers ----------------
 
+function DatasetCard({
+  dataset,
+  onChange,
+  onRemove,
+  onFilterChange,
+}: {
+  dataset: Dataset;
+  onChange: (patch: Partial<Dataset>) => void;
+  onRemove: () => void;
+  onFilterChange: <K extends keyof Dataset["filters"]>(k: K, v: Dataset["filters"][K]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const f = dataset.filters;
+  const filterGroups = ([
+    { label: "Campaigns", key: "campaigns", opts: f.campaigns },
+    { label: "Ad groups", key: "adGroups", opts: f.adGroups },
+    { label: "Devices", key: "devices", opts: f.devices },
+    { label: "Countries", key: "countries", opts: f.countries },
+    { label: "Platforms", key: "platforms", opts: f.platforms },
+    { label: "Industries", key: "industries", opts: f.industries },
+  ] as const).filter((g) => g.opts.length > 0);
+
+  return (
+    <div className={cn("rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2", !dataset.enabled && "opacity-60")}>
+      <div className="flex items-start gap-2">
+        <Switch checked={dataset.enabled} onCheckedChange={(v) => onChange({ enabled: v })} />
+        <div className="min-w-0 flex-1">
+          <Input
+            value={dataset.name}
+            onChange={(e) => onChange({ name: e.target.value })}
+            className="h-7 bg-sidebar text-xs"
+          />
+          <div className="mt-1 truncate text-[11px] text-sidebar-foreground/60">
+            {dataset.filename} · {dataset.rows.length.toLocaleString()} rows
+          </div>
+          <div className="mt-1">
+            <Select value={dataset.type} onValueChange={(v) => onChange({ type: v as DatasetType })}>
+              <SelectTrigger className="h-7 bg-sidebar text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(Object.keys(DATASET_LABELS) as DatasetType[]).map((t) => (
+                  <SelectItem key={t} value={t}>{DATASET_LABELS[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={onRemove}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger className="mt-2 flex w-full items-center justify-between rounded px-1 py-1 text-[11px] text-sidebar-foreground/70 hover:bg-sidebar-accent">
+          <span>Columns &amp; filters</span>
+          <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-2 pt-2">
+          <div className="flex flex-wrap gap-1">
+            {dataset.rawHeaders.map((h) => (
+              <Badge key={h} variant="outline" className="text-[10px]">{h}</Badge>
+            ))}
+          </div>
+          {filterGroups.map((g) => (
+            <div key={g.key}>
+              <div className="mb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">{g.label}</div>
+              <MultiCheckList
+                options={g.opts}
+                value={f[g.key]}
+                onChange={(v) => onFilterChange(g.key, v)}
+              />
+            </div>
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
+  );
+}
+
 function Section({
   title, icon, defaultOpen, children,
 }: { title: string; icon: React.ReactNode; defaultOpen?: boolean; children: React.ReactNode }) {
@@ -559,12 +722,13 @@ function RadioRow({ value, id, label }: { value: string; id: string; label: Reac
 function MultiCheckList({
   options, value, onChange,
 }: { options: string[]; value: string[]; onChange: (v: string[]) => void }) {
+  if (!options.length) return null;
   return (
-    <div className="space-y-1 rounded-md border border-sidebar-border bg-sidebar-accent/40 p-2">
+    <div className="space-y-1 rounded-md border border-sidebar-border bg-sidebar p-2">
       {options.map((opt) => {
         const checked = value.includes(opt);
         return (
-          <label key={opt} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm hover:bg-sidebar-accent">
+          <label key={opt} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-xs hover:bg-sidebar-accent">
             <Checkbox
               checked={checked}
               onCheckedChange={(c) => onChange(c ? [...value, opt] : value.filter((v) => v !== opt))}
