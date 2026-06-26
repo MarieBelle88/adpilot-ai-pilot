@@ -1108,54 +1108,81 @@ function EmptyState() {
 
 function RecCard({
   rec, status, onDecide,
-}: { rec: Recommendation; status?: ActionStatus; onDecide: (id: string, s: ActionStatus) => void }) {
+}: { rec: BackendRecommendation; status?: ActionStatus; onDecide: (id: string, s: ActionStatus) => void }) {
+  const id = rec.id ?? "";
   return (
     <Card className={cn("transition", status === "approved" && "border-success/50", status === "rejected" && "opacity-60")}>
       <CardContent className="p-4 sm:p-5">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
             <div className="mb-1 flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="capitalize">{rec.targetType.replace("_", " ")}</Badge>
-              <Badge variant="outline" className="border-primary/40 text-primary">{rec.rule}</Badge>
+              {rec.datasetType && (
+                <Badge variant="secondary" className="capitalize">{rec.datasetType.replace(/_/g, " ")}</Badge>
+              )}
+              {rec.category && (
+                <Badge variant="outline" className="capitalize">{rec.category}</Badge>
+              )}
+              {rec.ruleTriggered && (
+                <Badge variant="outline" className="border-primary/40 text-primary">{rec.ruleTriggered}</Badge>
+              )}
+              {rec.status && (
+                <Badge variant="outline" className="capitalize">{rec.status}</Badge>
+              )}
               {status && (
                 <Badge className={cn(
                   status === "approved" && "bg-success text-success-foreground",
                   status === "rejected" && "bg-destructive text-destructive-foreground",
-                )}>{status}</Badge>
+                )}>
+                  {status === "approved" ? "Approved (simulated)" : status}
+                </Badge>
               )}
             </div>
-            <div className="text-base font-semibold leading-snug sm:text-lg">{rec.action}</div>
-            <div className="mt-1 truncate text-xs text-muted-foreground">{rec.target}</div>
+            <div className="text-base font-semibold leading-snug sm:text-lg">{rec.title ?? "Recommendation"}</div>
+            <div className="mt-1 grid gap-0.5 text-xs text-muted-foreground">
+              {rec.target && <div className="truncate"><span className="font-medium text-foreground/70">Target:</span> {rec.target}</div>}
+              {rec.campaign && <div className="truncate"><span className="font-medium text-foreground/70">Campaign:</span> {rec.campaign}</div>}
+            </div>
           </div>
-          <ConfidenceBadge value={rec.confidence} />
+          <ConfidenceBadge value={rec.confidence ?? 0} />
         </div>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Evidence</div>
-            <p className="mt-1 text-sm">{rec.evidence}</p>
-          </div>
-          <div>
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Expected impact</div>
-            <p className="mt-1 text-sm font-medium text-success">{rec.impact}</p>
-          </div>
+          {(rec.reason || rec.evidence) && (
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Reason / evidence</div>
+              {rec.reason && <p className="mt-1 text-sm">{rec.reason}</p>}
+              {rec.evidence && rec.evidence !== rec.reason && (
+                <p className="mt-1 text-xs text-muted-foreground">{rec.evidence}</p>
+              )}
+            </div>
+          )}
+          {rec.expectedImpact && (
+            <div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Expected impact</div>
+              <p className="mt-1 text-sm font-medium text-success">{rec.expectedImpact}</p>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => onDecide(rec.id, "approved")} disabled={status === "approved"}>
+          <Button size="sm" onClick={() => onDecide(id, "approved")} disabled={status === "approved"}>
             <Check className="mr-1 h-4 w-4" /> Approve
           </Button>
-          <Button size="sm" variant="outline" onClick={() => onDecide(rec.id, "rejected")} disabled={status === "rejected"}>
+          <Button size="sm" variant="outline" onClick={() => onDecide(id, "rejected")} disabled={status === "rejected"}>
             <X className="mr-1 h-4 w-4" /> Reject
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => onDecide(rec.id, "pending")}>
+          <Button size="sm" variant="ghost" onClick={() => onDecide(id, "pending")}>
             <PencilLine className="mr-1 h-4 w-4" /> Edit
           </Button>
+          {status === "approved" && (
+            <Badge variant="outline" className="ml-auto text-[10px]">Simulated execution</Badge>
+          )}
         </div>
       </CardContent>
     </Card>
   );
 }
+
 
 function ConfidenceBadge({ value }: { value: number }) {
   const pct = Math.round(value * 100);
