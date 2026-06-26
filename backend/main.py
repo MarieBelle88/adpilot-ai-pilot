@@ -1,4 +1,6 @@
+import hashlib
 import json
+import random
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -419,6 +421,181 @@ def recs_to_backend_format(recs: list) -> list:
     return out
 
 
+def generate_ads_data_from_website(website_text: str, url: str) -> dict:
+    """Generate a realistic, site-specific Google Ads dataset from scraped content.
+    Uses the URL as a seed so the same site always returns the same numbers."""
+    rng = random.Random(int(hashlib.md5(url.encode()).hexdigest()[:8], 16))
+
+    # --- Extract signals from scraped text ---
+    title_line = next((l for l in website_text.splitlines() if l.startswith("TITLE:")), "")
+    site_name = title_line.replace("TITLE:", "").strip().split("–")[0].split("|")[0].split("-")[0].strip() or "Business"
+
+    headings_line = next((l for l in website_text.splitlines() if l.startswith("HEADINGS:")), "")
+    raw_headings = [h.strip() for h in headings_line.replace("HEADINGS:", "").split("|") if h.strip()][:8]
+
+    # Pull meaningful short phrases (2–4 words) from headings as category seeds
+    import re
+    def clean_phrase(s: str) -> str:
+        return re.sub(r"[^a-z0-9 ]", "", s.lower()).strip()
+
+    category_seeds = []
+    for h in raw_headings:
+        p = clean_phrase(h)
+        words = p.split()
+        if 1 <= len(words) <= 4 and len(p) > 3:
+            category_seeds.append(" ".join(words[:3]))
+
+    # Fallback categories if headings are sparse
+    if len(category_seeds) < 3:
+        body_words = re.findall(r"\b[a-z]{4,12}\b", website_text.lower())
+        freq: dict = {}
+        stopwords = {"that", "this", "with", "from", "have", "will", "your", "more", "also",
+                     "their", "been", "they", "what", "when", "which", "into", "over", "some",
+                     "about", "only", "other", "then", "than", "like", "just", "such", "each"}
+        for w in body_words:
+            if w not in stopwords:
+                freq[w] = freq.get(w, 0) + 1
+        top_words = sorted(freq, key=lambda x: -freq[x])[:12]
+        category_seeds += top_words
+    category_seeds = list(dict.fromkeys(category_seeds))[:4]  # dedup, max 4 campaigns
+
+    if not category_seeds:
+        category_seeds = ["products", "services", "offers", "solutions"]
+
+    # Modifiers for keyword expansion
+    buy_modifiers = ["buy", "best", "cheap", "top rated", "near me", "online", "price", "discount", "reviews"]
+    service_modifiers = ["near me", "best", "affordable", "professional", "local", "top", "trusted", "24/7", "book"]
+
+    text_lower = website_text.lower()
+    is_ecommerce = any(w in text_lower for w in ["buy", "cart", "shop", "basket", "checkout", "€", "$", "£", "price"])
+    modifiers = buy_modifiers if is_ecommerce else service_modifiers
+
+    target_cpa = 120.0  # default target CPA
+
+    campaigns = []
+    keywords = []
+    ads = []
+    landing_pages = []
+
+    for i, seed in enumerate(category_seeds):
+        camp_id = f"camp_{i+1:02d}"
+        camp_name = seed.title()
+        seed_words = seed.split()
+        base_kw = seed_words[0] if seed_words else "product"
+
+        # Build 5–7 keywords for this campaign
+        camp_kws = [seed] + [f"{mod} {base_kw}" for mod in rng.sample(modifiers, min(5, len(modifiers)))]
+        camp_kws = camp_kws[:6]
+
+        camp_spend = camp_clicks = camp_impressions = camp_convs = 0.0
+
+        for j, kw_text in enumerate(camp_kws):
+            kw_id = f"kw_{len(keywords)+1:03d}"
+            impressions = rng.randint(800, 18000)
+            ctr_pct = rng.uniform(1.5, 6.5)
+            clicks = max(1, int(impressions * ctr_pct / 100))
+            cpc = rng.uniform(0.40, 3.20)
+            spend = round(clicks * cpc, 2)
+
+            # Force a few wasted-spend (0 conv, high spend) and high-CPA keywords
+            if j == 0:  # first kw in each campaign: zero conversion waster
+                conversions = 0
+                spend = round(rng.uniform(420, 780), 2)
+            elif j == 1:  # second kw: high CPA
+                conversions = rng.randint(1, 3)
+                spend = round(conversions * target_cpa * rng.uniform(1.6, 2.4), 2)
+            elif j == 2:  # third kw: high performer (under-bid opportunity)
+                conversions = rng.randint(6, 14)
+                spend = round(conversions * target_cpa * rng.uniform(0.45, 0.68), 2)
+                impressions = rng.randint(8000, 20000)
+                clicks = max(conversions * 8, clicks)
+            else:
+                conversions = rng.randint(0, 5)
+
+            kw = {
+                "id": kw_id,
+                "campaignId": camp_id,
+                "text": kw_text,
+                "matchType": rng.choice(["BROAD", "PHRASE", "EXACT"]),
+                "clicks": clicks,
+                "impressions": impressions,
+                "spend": spend,
+                "conversions": conversions,
+                "qualityScore": rng.randint(4, 9),
+                "status": "ENABLED",
+                "bidAmount": round(cpc * 0.85, 2),
+            }
+            keywords.append(kw)
+            camp_spend += spend
+            camp_clicks += clicks
+            camp_impressions += impressions
+            camp_convs += conversions
+
+        camp_cpa = round(camp_spend / camp_convs, 2) if camp_convs else None
+        camp_roas = round((camp_convs * target_cpa * 2.5) / camp_spend, 2) if camp_spend else 0
+        campaigns.append({
+            "id": camp_id,
+            "name": camp_name,
+            "status": "ENABLED",
+            "dailyBudget": round(rng.uniform(20, 80), 2),
+            "spend": round(camp_spend, 2),
+            "impressions": int(camp_impressions),
+            "clicks": int(camp_clicks),
+            "conversions": int(camp_convs),
+            "cpa": camp_cpa,
+            "roas": camp_roas,
+            "type": "SEARCH",
+        })
+
+        # One RSA ad per campaign using site headings
+        headline1 = raw_headings[i] if i < len(raw_headings) else camp_name
+        ad_clicks = int(camp_clicks * 0.7)
+        ad_ctr = round(rng.uniform(1.8, 5.5), 2)
+        ads.append({
+            "id": f"ad_{i+1:02d}",
+            "campaignId": camp_id,
+            "headlines": [headline1[:30], f"Best {base_kw.title()} Online", f"{site_name[:20]} – Official"],
+            "descriptions": [f"Shop {camp_name} now.", f"Free delivery on orders over €50."],
+            "ctr": ad_ctr,
+            "clicks": ad_clicks,
+            "impressions": int(camp_impressions * 0.8),
+            "conversions": int(camp_convs * 0.7),
+        })
+
+    # Landing pages
+    landing_pages = [
+        {
+            "url": url,
+            "mobileConvRate": round(rng.uniform(1.2, 3.8), 2),
+            "desktopConvRate": round(rng.uniform(2.5, 5.5), 2),
+            "bounceRate": round(rng.uniform(38, 72), 1),
+            "mobileLCP": round(rng.uniform(2.1, 5.8), 1),
+        },
+        {
+            "url": url.rstrip("/") + "/contact",
+            "mobileConvRate": round(rng.uniform(2.8, 6.2), 2),
+            "desktopConvRate": round(rng.uniform(3.5, 7.0), 2),
+            "bounceRate": round(rng.uniform(20, 45), 1),
+            "mobileLCP": round(rng.uniform(1.5, 3.2), 1),
+        },
+    ]
+
+    # Add job-seeker search terms (triggers irrelevant-term rule)
+    search_terms = [
+        {"term": f"{category_seeds[0]} jobs", "clicks": rng.randint(8, 30), "spend": round(rng.uniform(40, 120), 2), "conversions": 0},
+        {"term": f"{category_seeds[0]} apprenticeship", "clicks": rng.randint(3, 15), "spend": round(rng.uniform(20, 70), 2), "conversions": 0},
+    ]
+
+    return {
+        "account": {"name": site_name, "currency": "EUR", "dateRange": "Last 30 days (generated from website)"},
+        "campaigns": campaigns,
+        "keywords": keywords,
+        "searchTerms": search_terms,
+        "ads": ads,
+        "landingPages": landing_pages,
+    }
+
+
 @app.post("/analyze")
 async def analyze_new(request: NewAnalyzeRequest):
     """New-style endpoint matching the frontend's api.ts AnalyzeRequest shape."""
@@ -438,16 +615,23 @@ async def analyze_new(request: NewAnalyzeRequest):
 
     if has_csv:
         ads_data = build_ads_data_from_csv(all_rows)
-        website_context = ""          # user supplied their own data — skip scraping
+        website_context = ""
     else:
-        ads_path = BASE_DIR / "mock_google_ads.json"
-        with open(ads_path) as f:
-            ads_data = json.load(f)
-        # Scrape the website URL when no CSV is provided
         if website_url and website_url.startswith("http"):
             website_context = scrape_website(website_url)
+            scrape_ok = website_context and not website_context.startswith("[Could not")
+            if scrape_ok:
+                # Generate site-specific ad data — different numbers for every URL
+                ads_data = generate_ads_data_from_website(website_context, website_url)
+            else:
+                ads_path = BASE_DIR / "mock_google_ads.json"
+                with open(ads_path) as f:
+                    ads_data = json.load(f)
         else:
             website_context = ""
+            ads_path = BASE_DIR / "mock_google_ads.json"
+            with open(ads_path) as f:
+                ads_data = json.load(f)
 
     config = {
         "targetKpi": goal.get("targetKpi", 120),
@@ -465,19 +649,26 @@ async def analyze_new(request: NewAnalyzeRequest):
     time.sleep(0.5)
     result = analyze_ads_data(ads_data, config, rule_cfg)
 
-    # Website-specific recommendations (only when we scraped something)
+    # Website-specific recommendations on top of data-driven ones
     website_recs = analyze_website_context(website_context, ads_data) if website_context else []
-
     all_recs = result["recommendations"] + website_recs
 
     total_rows = sum(len(ds.get("rows") or []) for ds in request.datasets)
     scrape_ok = website_context and not website_context.startswith("[Could not")
-    data_source = f"{total_rows} CSV rows" if has_csv else (
-        f"scraped {website_url}" if scrape_ok else "demo data"
+
+    # Extract business name from scraped title for the summary
+    title_line = next((l for l in website_context.splitlines() if l.startswith("TITLE:")), "") if website_context else ""
+    biz_name = title_line.replace("TITLE:", "").strip().split("–")[0].split("|")[0].split("-")[0].strip()
+
+    data_source = (
+        f"{total_rows} CSV rows" if has_csv else
+        f"{biz_name} (scraped)" if (scrape_ok and biz_name) else
+        f"scraped {website_url}" if scrape_ok else
+        "demo data"
     )
 
     exec_summary = (
-        f"Data source: {data_source}. "
+        f"Analysed {data_source}. "
         f"Found {len(all_recs)} recommendation(s)"
         + (f" including {len(website_recs)} based on your website content" if website_recs else "")
         + f". Estimated wasted spend: €{result['summary']['wastedSpend']:.0f}."
