@@ -270,6 +270,14 @@ function AdPilotDashboard() {
   const [history, setHistory] = useState<
     { id: string; action: string; outcome: ActionStatus; at: string }[]
   >([]);
+  const [lastRequest, setLastRequest] = useState<{
+    at: string;
+    datasetCount: number;
+    totalRows: number;
+    objective: string;
+    primaryKpi: string;
+    actionMode: string;
+  } | null>(null);
 
   const filtered = useMemo(
     () => recommendations.filter((r) => r.confidence >= minConfidence[0]),
