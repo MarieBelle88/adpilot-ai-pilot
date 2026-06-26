@@ -218,7 +218,8 @@ function AdPilotDashboard() {
           rawHeaders: parsed.rawHeaders,
           rowCount: parsed.rows.length,
           rows: parsed.rows,
-          filters: makeFiltersFor(parsed.detectedType),
+          filters: makeFiltersFor(parsed.detectedType, parsed.rows),
+          stats: parsed.stats,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to parse CSV";
