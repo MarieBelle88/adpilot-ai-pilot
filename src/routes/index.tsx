@@ -168,18 +168,18 @@ function bucketRec(rec: Recommendation): RecTab {
 
 function AdPilotDashboard() {
   // ---------- Config state ----------
-  const [websiteUrl, setWebsiteUrl] = useState("https://acme.example");
+  const [websiteUrl, setWebsiteUrl] = useState("https://www.pipedrive.com/");
   const [marketingNotes, setMarketingNotes] = useState(
-    "We sell B2B CRM software, ICP is 50–500 employee SaaS companies in NA.",
+    "Pipedrive — B2B CRM software for growing sales teams. Campaign goal: drive qualified free-trial sign-ups from companies with 50–500 employees in North America. Prioritize high-intent CRM and sales-pipeline keywords (e.g. 'crm software', 'sales pipeline tool', 'best crm for small business', 'sales crm'). De-prioritize generic/informational queries and free-CRM seekers. Target CPA: $20.",
   );
 
-  const [objective, setObjective] = useState("leads");
+  const [objective, setObjective] = useState("trials");
   const [primaryKpi, setPrimaryKpi] = useState("CPA");
-  const [targetKpi, setTargetKpi] = useState("120");
+  const [targetKpi, setTargetKpi] = useState("20");
   const [budgetPeriod, setBudgetPeriod] = useState<"daily" | "monthly">("daily");
   const [budgetAmount, setBudgetAmount] = useState("600");
   const [targetCountry, setTargetCountry] = useState("United States");
-  const [conversionType, setConversionType] = useState("Form submission");
+  const [conversionType, setConversionType] = useState("Free trial signup");
 
   const [dateRange, setDateRange] = useState("Last 30 days");
   const [matchType, setMatchType] = useState("All");
