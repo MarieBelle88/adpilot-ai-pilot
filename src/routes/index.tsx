@@ -781,13 +781,17 @@ function AdPilotDashboard() {
                         <div key={i} className="flex items-center justify-between gap-3 px-4 py-3">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-medium">{h.action}</div>
-                            <div className="text-xs text-muted-foreground">{h.at}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {h.at}
+                              {h.outcome === "approved" && h.simulated && " · simulated execution"}
+                            </div>
                           </div>
                           <Badge variant={h.outcome === "approved" ? "default" : "secondary"} className={cn(h.outcome === "approved" && "bg-success text-success-foreground")}>
-                            {h.outcome}
+                            {h.outcome === "approved" ? "approved (simulated)" : h.outcome}
                           </Badge>
                         </div>
                       ))}
+
                     </CardContent>
                   </Card>
                 )}
